@@ -11,4 +11,5 @@ celery.conf.update(
     enable_utc=True,
     task_track_started=True,
     worker_concurrency=5,
+    include=["app.tasks"],
 )
