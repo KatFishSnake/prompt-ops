@@ -225,8 +225,8 @@ if detected.
 
 **This is an APP UI.** Calm surface, strong typography, few colors. Dense but readable.
 
-- **Typography:** System font stack is acceptable for a 1-day build. Mono for code/prompts (JetBrains Mono or SF Mono via Tailwind `font-mono`).
-- **Color:** Neutral base (gray-50 background, white panels). One accent: green for positive/promote. Red for regression/error. Yellow for draft/warning. No purple gradients. No blue-to-anything gradients.
+- **Typography:** IBM Plex Mono for headings/labels/data, IBM Plex Sans for body. Load from Google Fonts.
+- **Color:** See Design System section below. Muted saturation. Blueprint blue accent (#3B82F6). Success #34D399, Danger #F87171, Warning #FBBF24.
 - **Spacing:** Tailwind's default scale. 16px padding for panels, 8px for compact elements.
 - **No cards for data.** Tables for lists. Split panes for comparisons. Inline rows for details.
 - **No icons in colored circles.** Status badges use text + subtle background color.
@@ -527,6 +527,8 @@ Default judge model: `gpt-4o-mini` (fast, cheap, temperature=0 for reproducibili
 
 API keys provided via environment variables in docker-compose (from `.env` file). If no key is available, the seed script provides pre-computed results so the reviewer can still see the full UI.
 
+**Judge JSON parsing fallback:** If the judge LLM returns malformed JSON (~5% of the time with gpt-4o-mini), wrap `json.loads()` in try/except. On parse failure, set score=0 for both responses with reasoning="Judge returned invalid response. Raw output: {raw}". This prevents silent failures and gives the user visibility into judge reliability.
+
 Scoring plugins (regex, custom functions) deferred to V2.
 
 ### Deploy / Promote Flow
@@ -581,7 +583,7 @@ If Celery/Redis setup exceeds 1 hour or causes docker-compose issues:
 8. **Seed script** — Populate sample prompts + traces, run a replay, so docker-compose up shows a working product immediately.
 9. **Tests** — pytest for backend: ~15 unit tests on API routes + Celery tasks, 1 integration smoke test (full loop). No frontend tests.
 10. **Polish** — Error states, loading states, responsive layout. Only after the loop works end-to-end.
-10. **APPROACH.md + Loom** — Write the doc, record the walkthrough.
+11. **APPROACH.md + Loom** — Write the doc, record the walkthrough.
 
 ### Time Allocation (~8-10 hours)
 
@@ -631,9 +633,93 @@ Minor issues from adversarial review that were not fixed (cosmetic or V2 scope):
 |--------|---------|-----|------|--------|----------|
 | CEO Review | `/plan-ceo-review` | Scope & strategy | 0 | — | — |
 | Codex Review | `/codex review` | Independent 2nd opinion | 1 | issues_found | 16 findings, 3 adopted |
-| Eng Review | `/plan-eng-review` | Architecture & tests (required) | 1 | CLEAR | 3 issues, 1 critical gap |
+| Eng Review | `/plan-eng-review` | Architecture & tests (required) | 2 | CLEAR | Run 1: 3 issues, 1 critical gap. Run 2: 1 fix (judge JSON), 0 critical gaps. |
 | Design Review | `/plan-design-review` | UI/UX gaps | 1 | CLEAR | score: 4/10 → 8/10, 5 decisions |
 
-**CODEX:** 3 findings adopted: judge temperature=0 for reproducibility, Trace.prompt_version_id for provenance, is_active unique partial index.
-**UNRESOLVED:** 0 decisions outstanding.
+**CODEX:** 3 findings adopted: judge temperature=0, Trace.prompt_version_id, is_active unique partial index.
+**UNRESOLVED:** 0 decisions outstanding. 0 critical gaps.
 **VERDICT:** ENG + DESIGN CLEARED — ready to implement.
+
+---
+
+## Design System
+
+### Product Context
+- **What this is:** Prompt management and replay platform for production AI systems
+- **Who it's for:** Engineers who deploy and iterate on LLM prompts
+- **Space/industry:** LLM ops tooling (peers: Langfuse, Braintrust, Helicone)
+- **Project type:** Web app / data-dense dashboard
+
+### Aesthetic Direction
+- **Direction:** Brutalist Blueprint
+- **Decoration level:** Minimal (zero decoration, exposed structure)
+- **Mood:** The app looks like a technical drawing of itself. Ultra-precise, engineered, zero polish. Every pixel is structural. The product should feel like opening a well-organized toolbox, not a marketing dashboard.
+- **Reference sites:** Langfuse (sidebar pattern), Linear (density), Warp terminal (monospace-forward)
+
+### Typography
+- **Display/Headings:** IBM Plex Mono 700 — monospace headings are the brand signal. Technical, precise, unmistakable.
+- **Body:** IBM Plex Sans 400/500 — clean readability for descriptions and content.
+- **UI/Labels:** IBM Plex Mono 600 — section labels, nav items, metadata all in mono.
+- **Data/Tables:** IBM Plex Mono 400 (tabular-nums) — numbers align, traces read like code.
+- **Code/Prompts:** IBM Plex Mono 400 — same as data. One mono font for everything technical.
+- **Loading:** Google Fonts CDN: `IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;0,700;1,400` + `IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400`
+- **Scale:**
+  - Display: 48px/700 (replay metrics, page heroes)
+  - H1: 28px/600 (page titles)
+  - H2: 20px/600 (section titles)
+  - H3: 16px/600 (subsections)
+  - Body: 14px/400 (descriptions, content)
+  - Small: 12px/400 (timestamps, metadata)
+  - Label: 11px/600 uppercase, letter-spacing 1-2px (section labels, table headers)
+
+### Color
+- **Approach:** Restrained. Color is rare and meaningful. Muted saturation throughout.
+- **Background:** #F8FAFC (slate-50)
+- **Surface:** #FFFFFF
+- **Sidebar:** #F1F5F9 (slate-100)
+- **Primary text:** #0F172A (slate-900)
+- **Muted text:** #64748B (slate-500)
+- **Accent:** #3B82F6 (blue-500, muted blueprint blue)
+- **Accent hover:** #2563EB (blue-600)
+- **Success:** #34D399 (emerald-400, muted green for improved/promote)
+- **Danger:** #F87171 (red-400, muted red for regression/error)
+- **Warning:** #FBBF24 (amber-400, muted yellow for draft/caution)
+- **Info:** #60A5FA (blue-400)
+- **Border:** #CBD5E1 (slate-300)
+- **Border light:** #E2E8F0 (slate-200)
+- **Semantic backgrounds:** success #ECFDF5, warning #FFFBEB, error #FEF2F2, info #EFF6FF (all at low opacity)
+- **Dark mode:** Deferred to V2.
+
+### Spacing
+- **Base unit:** 4px
+- **Density:** Comfortable (data-dense but not cramped)
+- **Scale:** 2px / 4px / 8px / 12px / 16px / 24px / 32px / 48px / 64px
+- **Panel padding:** 16-24px
+- **Table cell padding:** 10px 12px
+- **Button padding:** 8px 16px
+
+### Layout
+- **Approach:** Grid-disciplined. Strict alignment, no creative breaks.
+- **Grid:** Sidebar (200px fixed) + fluid main workspace
+- **Max content width:** None (fills workspace). Tables scroll horizontally if needed.
+- **Border radius:** 0px everywhere. Zero. This is the defining visual choice.
+- **Borders:** 1px solid #CBD5E1 on all containers, tables, inputs. Hairline. Structural.
+
+### Motion
+- **Approach:** Minimal-functional
+- **Easing:** ease-out for enter, ease-in for exit
+- **Duration:** micro 50-100ms (hover states), short 150ms (accordion, toasts), medium 300ms (progress bar)
+- **Specifics:**
+  - Accordion expand: 150ms ease-out
+  - Progress bar fill: 300ms ease-out
+  - Toast entrance: 150ms slide-in from top
+  - Result row entrance: 100ms fade + slide (staggered by 50ms per row during SSE streaming)
+
+### Decisions Log
+| Date | Decision | Rationale |
+|------|----------|-----------|
+| 2026-03-27 | Brutalist Blueprint direction | Differentiate from generic LLM ops dashboards. Every competitor uses cool grays + rounded corners. Zero radius + exposed grid + blueprint blue = immediately recognizable. |
+| 2026-03-27 | IBM Plex Mono + Sans | Monospace headings are the brand. Plex is designed for technical content. Pairs naturally with the brutalist aesthetic. |
+| 2026-03-27 | Muted accent colors | Less saturated accents feel more premium and easier on the eyes for data-dense interfaces. Full saturation screams "notification" on every element. |
+| 2026-03-27 | No dark mode in MVP | Every competitor has dark mode. We skip it and invest the time in the replay hero feature. V2 addition. |
+| 2026-03-27 | No border-radius anywhere | The single most polarizing and memorable visual choice. Makes the app unmistakable. |
