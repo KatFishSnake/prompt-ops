@@ -60,12 +60,15 @@ Claude subagent (independent cold read, no conversation context):
 - PostgreSQL for durable storage
 - Redis as Celery broker + cache
 - Celery workers for async replay fan-out
-- litellm for model-agnostic LLM calls
+- `openai` Python SDK for LLM calls (direct to OpenAI API, reviewer provides key)
+- Model-agnosticism via openai SDK/OpenRouter deferred to V2
 
 **Infrastructure**:
 - docker-compose with 5 services: frontend, backend, worker, postgres, redis
 - Single backend Dockerfile (shared by API + worker)
 - Alembic for database migrations
+- Backend entrypoint script: `wait-for-pg.sh` → `alembic upgrade head` → `python seed.py` (if DB empty) → `uvicorn main:app`
+- Worker entrypoint: `wait-for-pg.sh` → `wait-for-redis.sh` → `celery -A worker worker`
 - Health checks: backend exposes `GET /health`, postgres and redis use native health checks, `depends_on` with `condition: service_healthy`
 - Networking: Next.js `next.config.js` rewrites proxy `/api/*` requests to the backend service. No CORS needed — same-origin from the browser's perspective.
 
@@ -78,14 +81,18 @@ Prompt
 PromptVersion
   id, prompt_id, version_number, content (text), model_config (json),
   is_active (bool), created_at, created_by
+  # DB constraint: unique partial index on (prompt_id) WHERE is_active = true
+  # Ensures exactly one active version per prompt at the database level.
 
   # model_config schema:
   # {"model": "gpt-4o", "temperature": 0.7, "max_tokens": 1024}
   # Falls back to defaults if fields are omitted.
 
 Trace
-  id, prompt_id (FK → Prompt), input (json), output (text), model (str),
-  latency_ms (int), metadata (json), created_at
+  id, prompt_id (FK → Prompt), prompt_version_id (FK → PromptVersion, nullable),
+  input (json), output (text), model (str), latency_ms (int), metadata (json), created_at
+  # prompt_version_id tracks which version was active when the trace was collected.
+  # Enables accurate provenance: compare original version's output vs. replayed version.
 
   # Input schema (OpenAI-compatible):
   # {
@@ -165,13 +172,314 @@ GET    /api/replay/{job_id}/stream     SSE stream of replay progress
 # GET  /api/evals/{id}                get eval results
 ```
 
+### Shadcn Component Mapping
+
+```
+USE CASE                    | SHADCN COMPONENT      | NOTES
+----------------------------|-----------------------|---------------------------
+Prompt/trace lists          | Table                 | NOT Card. Dense rows.
+Status indicators           | Badge                 | active=green, draft=yellow, archived=gray
+Version tabs                | Tabs                  | Along top of Prompt Detail
+Prompt editor               | Textarea              | Monospace. Or integrate CodeMirror if time.
+Model config inputs         | Select + Input        | Dropdowns for model, inputs for temp/tokens
+Action buttons              | Button                | Primary=dark, secondary=outline, danger=red
+Confirmation dialogs        | AlertDialog           | For promote confirmation
+Toast notifications         | Toast (sonner)        | Success/error feedback
+Replay progress             | Progress              | Determinate bar with percentage
+Metric cards                | Custom div            | NOT Card component. Just large numbers + labels.
+Accordion trace rows        | Accordion             | One expanded at a time
+Onboarding overlay          | Dialog (stepped)      | 3-step modal
+Create prompt form          | Dialog + Input        | Modal with name + description fields
+Sidebar nav                 | Custom                | Not a Shadcn component. Hand-built.
+```
+
+No DESIGN.md design system file exists. Component decisions above serve as the de-facto
+design system for MVP. Consider running /design-consultation before V2 to formalize.
+
+### Responsive & Accessibility
+
+**Desktop (1024px+):** Full sidebar + workspace layout as described above.
+
+**Tablet (768px-1023px):** Sidebar collapses to icon-only (40px wide). Hover/click
+expands to full width as overlay. Main workspace fills remaining width. Tables may
+need horizontal scroll on narrow tablets.
+
+**Mobile (<768px):** Out of scope for MVP. Show a "Best experienced on desktop" message
+if detected.
+
+**Accessibility (all viewports):**
+- **Keyboard navigation:** Tab through sidebar items, table rows, action buttons. Enter to
+  activate. Escape to close dialogs/overlays. Arrow keys to navigate within tables.
+- **ARIA landmarks:** `nav` for sidebar, `main` for workspace, `role="table"` for data tables,
+  `role="alert"` for toasts, `aria-live="polite"` on replay progress metrics (screen readers
+  announce updates as results stream in).
+- **Color contrast:** WCAG AA minimum (4.5:1 for text, 3:1 for large text). Test green/red
+  on neutral backgrounds. Don't rely on color alone for status — always pair with text
+  labels or icons (↑/↓ arrows for score deltas, "active"/"draft" text in badges).
+- **Touch targets:** 44px minimum height for all interactive elements (buttons, table rows,
+  sidebar items). Shadcn defaults are close but verify.
+- **Focus indicators:** Visible focus ring on all interactive elements. Don't remove
+  outline — restyle it to match the accent color.
+
+### Visual Language & Anti-Slop Rules
+
+**This is an APP UI.** Calm surface, strong typography, few colors. Dense but readable.
+
+- **Typography:** System font stack is acceptable for a 1-day build. Mono for code/prompts (JetBrains Mono or SF Mono via Tailwind `font-mono`).
+- **Color:** Neutral base (gray-50 background, white panels). One accent: green for positive/promote. Red for regression/error. Yellow for draft/warning. No purple gradients. No blue-to-anything gradients.
+- **Spacing:** Tailwind's default scale. 16px padding for panels, 8px for compact elements.
+- **No cards for data.** Tables for lists. Split panes for comparisons. Inline rows for details.
+- **No icons in colored circles.** Status badges use text + subtle background color.
+- **No centered everything.** Left-align all text. Right-align numbers.
+- **No decorative elements.** No blobs, waves, or floating shapes. If a section feels empty, it needs better content.
+- **Headings are utility labels:** "Prompts", "Trace Results", "Replay: v7 → v8". Not "Welcome to PromptOps" or "Manage Your AI Behavior."
+
+### App Shell & Navigation
+
+Persistent workspace layout (NOT route-by-route pages):
+
+```
++------------------+----------------------------------------------+
+| SIDEBAR (200px)  |  MAIN WORKSPACE                              |
+|                  |                                              |
+|  PromptOps       |  [Page content fills this area]              |
+|                  |                                              |
+|  MANAGE          |                                              |
+|  ● Prompts       |                                              |
+|  ○ Traces        |                                              |
+|                  |                                              |
+|  TEST            |                                              |
+|  ○ Replays       |                                              |
+|                  |                                              |
+|  DEPLOY          |                                              |
+|  ○ Versions      |                                              |
++------------------+----------------------------------------------+
+```
+
+- Sidebar persists across all views. Active item highlighted.
+- No cards for data display. Use tables, split panes, inline rows.
+- Copy is utility language: area labels, status, actions. No mood/marketing copy.
+- One accent color (green for positive/promote, red for regression, neutral for unchanged).
+
 ### UI Pages
 
-1. **Prompts** — registry list with name, active version, version count, status badges
-2. **Prompt Detail** — version tabs, prompt editor, template variables, action buttons (Replay, Eval, Promote)
-3. **Traces** — ingested production traces, filterable by prompt name
-4. **Replay Results** — aggregate metrics (improved/unchanged/regressed), side-by-side diff view, per-trace score deltas, promote button
-5. ~~Eval Results~~ — deferred to V2. MVP evals happen through the replay system.
+**0. First-Run Onboarding (shown once, dismissed permanently)**
+
+3-step walkthrough overlay on first visit (stored in localStorage):
+
+```
+Step 1/3: "PromptOps manages your AI prompts in production."
+  [Visual: icon of prompt document with version badge]
+  "Version prompts, test changes against real traffic, deploy with confidence."
+
+Step 2/3: "Replay real conversations against new prompts."
+  [Visual: icon of two columns side-by-side]
+  "See exactly what would change before you ship."
+
+Step 3/3: "A replay just finished. Take a look?"
+  [Button: "See Replay Results →"]  [Button: "Explore on my own"]
+```
+
+- "See Replay Results" navigates to the completed seed replay.
+- "Explore on my own" dismisses and shows the Prompts list.
+- Compact, 3 steps max. No lengthy tutorial. Under 10 seconds total.
+- Skip button visible on every step.
+
+**1. Prompts (default landing after onboarding)**
+
+```
+  PRIMARY:   Prompt name + active version badge + last replay outcome (inline)
+  SECONDARY: Version count, last updated timestamp
+  TERTIARY:  Description (truncated)
+  ACTION:    Click row → Prompt Detail. "Run Replay" button per row if active.
+```
+
+Table layout. Each row shows the prompt name, its active version, and a compact
+replay status indicator (e.g., "v7→v8: 4↑ 1↓" or "No replays"). This pulls the
+reviewer toward the hero feature immediately.
+
+**Empty state:** "No prompts yet. Create your first prompt to get started." + primary
+"Create Prompt" button + brief explanation of what prompts are in this context.
+
+**2. Prompt Detail**
+
+```
+  +--VERSION TABS: [v6] [v7 (active)] [v8 (draft)] [+ New Version]--+
+  |                                                                   |
+  |  EDITOR (monospace textarea, Jinja2 variable highlighting)        |
+  |  ┌─────────────────────────────────────────────────────────────┐  |
+  |  │ You are a support agent for {{product_name}}.               │  |
+  |  │ Rules:                                                      │  |
+  |  │ - Always be empathetic and solution-oriented                │  |
+  |  └─────────────────────────────────────────────────────────────┘  |
+  |                                                                   |
+  |  DETECTED VARIABLES: product_name, plan_type (extracted from template)|
+  |                                                                   |
+  |  MODEL CONFIG: [gpt-4o ▾] temp: [0.7] max_tokens: [1024]        |
+  |                                                                   |
+  |  ACTIONS:                                                         |
+  |  [Save as v9]  [▶ Replay vs Active]  [↑ Promote to Active]       |
+  +-------------------------------------------------------------------+
+```
+
+- Version tabs along top. Active version highlighted with badge. Draft versions
+  show yellow indicator.
+- Editor: monospace textarea. Template variables ({{...}}) highlighted in a distinct color.
+- "Detected variables" list below editor, auto-extracted from template text.
+- "Replay vs Active" button is the hero CTA: automatically uses active=source,
+  current tab=target. One click to start the key flow.
+- "Promote to Active" only enabled on non-active versions.
+- Creating a new version pre-fills the editor with the currently viewed version's
+  content (fork pattern, not blank).
+
+**Empty state (no versions):** Should not happen — creating a prompt creates v1.
+
+**3. Traces**
+
+```
+  PRIMARY:   Trace input (user message, truncated to ~80 chars)
+  SECONDARY: Prompt name, model, latency, timestamp
+  TERTIARY:  Expand to see full input/output
+```
+
+Filterable table. Click to expand row and see full input/output JSON.
+
+**Empty state:** "No traces ingested yet. Send traces via POST /api/traces." + code
+snippet showing the curl command to ingest a trace.
+
+**4. Replay Results (THE HERO PAGE)**
+
+```
+  ┌─────────────────────────────────────────────────────────────────┐
+  │  customer-support-agent: v7 (active) → v8 (draft)              │
+  │  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 70% (14/20)             │
+  ├─────────────────────────────────────────────────────────────────┤
+  │                                                                 │
+  │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐       │
+  │  │    4     │  │   15     │  │    1     │  │  6.8→7.3 │       │
+  │  │ Improved │  │Unchanged │  │Regressed │  │ Avg Score│       │
+  │  │  (green) │  │ (neutral)│  │  (red)   │  │  (+0.5)  │       │
+  │  └──────────┘  └──────────┘  └──────────┘  └──────────┘       │
+  │                                                                 │
+  │  TRACE RESULTS (accordion — one expanded at a time)             │
+  │  ┌─ #1847 "How do I cancel my sub..." ──── 6→9 (+3) ↑ ──────┐ │
+  │  │  ┌─── v7 (original) ───┐  ┌──── v8 (replayed) ───┐       │ │
+  │  │  │ I can help you       │  │ I can help you        │       │ │
+  │  │  │ cancel. Go to...     │  │ cancel. Your access   │       │ │
+  │  │  │ [-removed text-]     │  │ [+continues until...] │       │ │
+  │  │  └──────────────────────┘  └───────────────────────┘       │ │
+  │  │  Judge: "v8 is more empathetic..." (collapsible)           │ │
+  │  └────────────────────────────────────────────────────────────┘ │
+  │  ┌─ #1848 "My payment failed" ──────── 7→8 (+1) ↑ ──────────┐ │
+  │  └─ (collapsed — click to expand) ───────────────────────────┘ │
+  │  ┌─ #1849 "Can I get a refund?" ────── 5→8 (+3) ↑ ──────────┐ │
+  │  └─ (collapsed) ─────────────────────────────────────────────┘ │
+  │  ┌─ #1851 "Speak to a manager" ─────── 7→5 (-2) ↓ ──────────┐ │
+  │  └─ (collapsed — RED highlight for regression) ──────────────┘ │
+  │                                                                 │
+  │  ┌──────────────────────────────────────────────────────────┐  │
+  │  │  [↑ Promote v8 to Active]        (sticky bottom bar)    │  │
+  │  └──────────────────────────────────────────────────────────┘  │
+  └─────────────────────────────────────────────────────────────────┘
+```
+
+**Content hierarchy:**
+1. PRIMARY: Version comparison header + progress bar (what are we comparing?)
+2. SECONDARY: Aggregate metrics — four large numbers (improved/unchanged/regressed/avg score)
+3. TERTIARY: Per-trace results table (accordion, one expanded at a time)
+4. ACTION: Promote button in sticky bottom bar (always visible)
+
+**Diff visualization:**
+- Two-column layout: left = original, right = replayed
+- Sentence-level diffing using diff-match-patch library
+- Green highlight for additions, red for removals
+- Columns scroll in sync
+- Truncate to ~500 chars with "Show full response" expand
+- Judge reasoning appears below the diff in a collapsible section
+
+**Score delta display:**
+- Positive delta: green text, up arrow (e.g., "+3 ↑")
+- Negative delta: red text, down arrow (e.g., "-2 ↓")
+- Zero delta: gray text, dash
+
+**Failed traces:** Red background on row, error message shown inline. Excluded from
+aggregate metrics. Count shown as "Failed: 2" next to the metrics.
+
+**5. ~~Eval Results~~ — deferred to V2.** MVP evals happen through the replay system.
+
+### User Journey (Reviewer Demo Flow)
+
+```
+STEP | USER DOES                      | USER FEELS         | PLAN SUPPORTS WITH
+-----|--------------------------------|--------------------|----------------------------
+  1  | docker compose up, opens app   | Curious            | Onboarding overlay (3 steps)
+  2  | Clicks "See Replay Results"    | Intrigued          | Direct link to completed replay
+  3  | Sees 4↑ 15= 1↓ metrics        | "Oh, this is real" | Large aggregate numbers
+  4  | Expands a trace, sees diff     | Impressed          | Side-by-side with highlights
+  5  | Sees the regression (1↓)       | Engaged            | Red row draws attention
+  6  | Reads judge reasoning          | Trusting           | Collapsible explanation
+  7  | Clicks Promote v8              | Confident          | Sticky bottom bar, one click
+  8  | Sees "v8 is now active" toast  | Satisfied          | Redirect to Prompt Detail
+  9  | Edits prompt, creates v9       | Exploring          | Fork pattern, editor pre-fills
+ 10  | Runs new replay (if API key)   | Ownership          | "Replay vs Active" one-click
+```
+
+**Where it can break:**
+- Step 1→2: If onboarding is too long or unclear. Keep under 10 seconds.
+- Step 3→4: If metrics don't immediately parse. Use large numbers, clear labels.
+- Step 7: If promote button feels dangerous. Add a confirmation dialog: "Promote v8 to active? This replaces v7 for all consumers."
+- Step 10: If no API key, show clear error with instructions. Don't let it fail silently.
+
+**Post-promote resolution:** After promoting, redirect to Prompt Detail with the new
+active version highlighted. Show message: "v8 is now active. New traces will be
+collected against this version." This closes the emotional loop.
+
+### Interaction States
+
+```
+FEATURE              | LOADING              | EMPTY                    | ERROR                  | SUCCESS              | PARTIAL
+---------------------|----------------------|--------------------------|------------------------|----------------------|------------------
+Prompts list         | Skeleton table rows  | "No prompts yet" +       | Toast: "Failed to      | Table populated      | N/A
+                     |                      | Create Prompt CTA +      | load prompts"          |                      |
+                     |                      | brief explanation         |                        |                      |
+---------------------|----------------------|--------------------------|------------------------|----------------------|------------------
+Prompt Detail        | Skeleton editor      | N/A (creating prompt     | Toast: "Failed to      | Editor + version     | N/A
+                     |                      | creates v1)              | load prompt"           | tabs populated       |
+---------------------|----------------------|--------------------------|------------------------|----------------------|------------------
+Traces list          | Skeleton table rows  | "No traces ingested" +   | Toast: "Failed to      | Table populated      | N/A
+                     |                      | curl snippet for API     | load traces"           |                      |
+---------------------|----------------------|--------------------------|------------------------|----------------------|------------------
+Replay (streaming)   | Progress bar at 0/N  | "No replays run yet" +   | Per-trace: red row +   | Final metrics +      | Results appearing
+                     | + "Starting replay..." | "Select a prompt and    | error message inline.  | promote button       | incrementally,
+                     | skeleton metric cards | run Replay vs Active"   | Aggregate: "17/20      | enabled. Confetti?   | metrics updating
+                     |                      |                          | succeeded, 3 failed"   | No. Just the green   | live. Progress bar
+                     |                      |                          | Job-level: banner +    | promote button.      | filling.
+                     |                      |                          | retry button           |                      |
+---------------------|----------------------|--------------------------|------------------------|----------------------|------------------
+Promote              | Button shows spinner | N/A                      | Toast: "Promote        | Toast: "v8 is now    | N/A
+                     | + "Promoting..."     |                          | failed" + retry        | active" + redirect   |
+                     |                      |                          |                        | to Prompt Detail     |
+---------------------|----------------------|--------------------------|------------------------|----------------------|------------------
+Create Prompt        | Button shows spinner | N/A                      | Inline validation:     | Redirect to Prompt   | N/A
+                     |                      |                          | "Name already exists"  | Detail page          |
+---------------------|----------------------|--------------------------|------------------------|----------------------|------------------
+No API key (replay)  | N/A                  | N/A                      | Banner on replay page: | N/A                  | N/A
+                     |                      |                          | "No API key configured.|                      |
+                     |                      |                          | Add OPENAI_API_KEY to  |                      |
+                     |                      |                          | .env and restart."     |                      |
+---------------------|----------------------|--------------------------|------------------------|----------------------|------------------
+SSE disconnect       | N/A                  | N/A                      | Subtle indicator:      | Auto-reconnect,      | Polling fallback
+                     |                      |                          | "Live updates paused,  | indicator disappears | at 2s intervals.
+                     |                      |                          | refreshing..."         |                      | Full state on each
+                     |                      |                          | Poll every 2s.         |                      | poll response.
+```
+
+**Replay page state sequence (the hero experience):**
+1. **Initiating:** User clicks "Replay vs Active". Button shows spinner. Backend creates job.
+2. **Waiting for first result:** Progress bar shows "0/20 traces". Skeleton metric cards. "Starting replay..." text. First result should appear within 10-15 seconds.
+3. **Streaming:** Results appear one by one in the accordion table. Metrics update live (improved count ticks up, average score recalculates). Progress bar fills. Each new row slides in with a subtle entrance.
+4. **Complete:** Progress bar hits 100%. Metrics show final state. Promote button in sticky bar becomes active (was disabled during streaming). Brief completion indicator: "Replay complete — 20/20 traces processed."
+5. **Complete with failures:** Same as above, but failed count shown. Failed rows have red background. "17/20 succeeded, 3 failed" label. Promote button still active (your call whether to promote).
 
 ### Replay Engine (the hero)
 
@@ -181,17 +489,18 @@ GET    /api/replay/{job_id}/stream     SSE stream of replay progress
    - Takes the trace's original input (messages array + template_vars)
    - Renders the target version's prompt template with Jinja2 using template_vars
    - Replaces the system message with the rendered template, preserves the user message
-   - Calls the LLM via litellm with the target version's model_config
+   - Calls the LLM via openai SDK with the target version's model_config
    - Stores the replayed output as a ReplayResult
    - Example: Trace has `system: "Old prompt for {{product_name}}"` + `user: "Cancel my sub"`
      → Replay renders target template `"New prompt for {{product_name}}"` with vars `{product_name: "Acme"}`
      → Sends `[{system: "New prompt for Acme"}, {user: "Cancel my sub"}]` to LLM
 4. After each replay, run LLM-as-judge on original vs. replayed output (randomize A/B position to mitigate positional bias)
 5. Frontend subscribes to SSE stream, renders results as they arrive. If SSE disconnects, client falls back to polling `GET /api/replay/{job_id}`. No `Last-Event-ID` support in MVP.
-6. Rate limiting: max 5 concurrent LLM calls per replay job. Retry up to 2x with exponential backoff. 30s timeout per call. Judge calls run in parallel with subsequent replay calls to improve throughput.
-7. SSE coordination: the SSE endpoint polls ReplayResult rows in Postgres every 1s. Simple, no Redis pub/sub needed. If behind schedule at hour 6, drop SSE entirely in favor of polling and simplify the diff view to plain text.
+6. Rate limiting: max 5 concurrent LLM calls per replay job. Retry up to 2x with exponential backoff. 30s timeout per call. Judge calls run in parallel with subsequent replay calls to improve throughput. Error handling: catch `openai.APIError` and `openai.APITimeoutError` specifically. Log full error message in ReplayResult.error field for UI display.
+7. SSE coordination: the SSE endpoint polls ReplayResult rows in Postgres every 3s. Simple, no Redis pub/sub needed. 3s interval balances responsiveness with minimal DB load (~40-80 queries per replay session). If behind schedule at hour 6, drop SSE entirely in favor of polling and simplify the diff view to plain text.
 8. `source_version_id` on ReplayJob records which version was active when traces were collected — it is not re-executed. Original outputs come from the stored traces.
 9. Expected latency: a 20-trace replay with judging takes ~2-4 minutes. SSE streaming mitigates the wait by showing results incrementally.
+10. Replay conflict: if a replay is already running for the same prompt, new replays are queued and run after the current one finishes. UI shows "Replay queued (1 ahead)" on the button. Sidebar nav shows a badge with queued count.
 
 ### Template Engine
 
@@ -214,7 +523,7 @@ Score each response 1-10 on helpfulness, accuracy, and tone given the system pro
 Return JSON: {"score_a": N, "score_b": N, "reasoning": "..."}
 ```
 
-Default judge model: `gpt-4o-mini` (fast, cheap). Default replay model: whatever is specified in the prompt version's `model_config`, falling back to `gpt-4o-mini`.
+Default judge model: `gpt-4o-mini` (fast, cheap, temperature=0 for reproducibility). Default replay model: whatever is specified in the prompt version's `model_config`, falling back to `gpt-4o-mini`. Judge and replay calls both use temperature=0 to maximize determinism. (Acknowledged limitation: LLM outputs are still non-deterministic even at temp=0, but this minimizes variance.)
 
 API keys provided via environment variables in docker-compose (from `.env` file). If no key is available, the seed script provides pre-computed results so the reviewer can still see the full UI.
 
@@ -270,7 +579,8 @@ If Celery/Redis setup exceeds 1 hour or causes docker-compose issues:
 6. **Frontend shell** — Next.js app, sidebar nav, prompts list page, prompt detail/editor page.
 7. **Replay results UI** — Aggregate metrics, side-by-side diff, per-trace table. The demo screen.
 8. **Seed script** — Populate sample prompts + traces, run a replay, so docker-compose up shows a working product immediately.
-9. **Polish** — Error states, loading states, responsive layout. Only after the loop works end-to-end.
+9. **Tests** — pytest for backend: ~15 unit tests on API routes + Celery tasks, 1 integration smoke test (full loop). No frontend tests.
+10. **Polish** — Error states, loading states, responsive layout. Only after the loop works end-to-end.
 10. **APPROACH.md + Loom** — Write the doc, record the walkthrough.
 
 ### Time Allocation (~8-10 hours)
@@ -289,6 +599,23 @@ If Celery/Redis setup exceeds 1 hour or causes docker-compose issues:
 - You picked Postgres + Redis + Celery over SQLite, even though SQLite would be simpler for a demo. You're building toward V3 (the proxy), not just V1. That's the difference between someone building a take-home and someone building a product.
 - Trace replay as "sacred" was an immediate, confident answer. You didn't need to think about what makes this different — you already knew. That suggests you've felt the pain of deploying prompt changes blind.
 
+## Implementation Notes (from design review)
+
+- **Diff library:** Use `diff-match-patch` (Google, MIT license, works in browser). Sentence-level granularity.
+- **Onboarding storage:** `localStorage.setItem('promptops-onboarded', 'true')`. Check on app mount.
+- **Promote confirmation:** AlertDialog with copy: "Promote v8 to active? This replaces v7 for all consumers of this prompt." Buttons: "Cancel" / "Promote" (primary).
+
+## NOT in scope (design)
+
+Explicitly deferred design decisions:
+- Mobile responsive layout (show desktop-only message)
+- Dark mode / theme switching
+- Multi-user / avatar / collaboration indicators
+- Notification system / email alerts
+- Custom branding / white-labeling
+- Animated transitions between pages (use Shadcn defaults)
+- Motion design beyond basic entrance animations
+
 ## Reviewer Concerns
 
 Minor issues from adversarial review that were not fixed (cosmetic or V2 scope):
@@ -297,3 +624,16 @@ Minor issues from adversarial review that were not fixed (cosmetic or V2 scope):
 2. **No delete/archive operations.** Deferred to V2.
 3. **Trace.model column is denormalized from input.model.** Intentional for filterability — `input` stores the full original request payload, `model` column is extracted for quick queries.
 4. **Batch ingestion is all-or-nothing but replay is best-effort.** Intentional: partial trace sets are confusing to query, but partial replay results are still informative.
+
+## GSTACK REVIEW REPORT
+
+| Review | Trigger | Why | Runs | Status | Findings |
+|--------|---------|-----|------|--------|----------|
+| CEO Review | `/plan-ceo-review` | Scope & strategy | 0 | — | — |
+| Codex Review | `/codex review` | Independent 2nd opinion | 1 | issues_found | 16 findings, 3 adopted |
+| Eng Review | `/plan-eng-review` | Architecture & tests (required) | 1 | CLEAR | 3 issues, 1 critical gap |
+| Design Review | `/plan-design-review` | UI/UX gaps | 1 | CLEAR | score: 4/10 → 8/10, 5 decisions |
+
+**CODEX:** 3 findings adopted: judge temperature=0 for reproducibility, Trace.prompt_version_id for provenance, is_active unique partial index.
+**UNRESOLVED:** 0 decisions outstanding.
+**VERDICT:** ENG + DESIGN CLEARED — ready to implement.
