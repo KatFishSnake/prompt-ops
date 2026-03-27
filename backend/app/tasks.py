@@ -10,7 +10,7 @@ from sqlalchemy.orm import sessionmaker
 
 from .celery_app import celery
 from .config import settings
-from .models import PromptVersion, ReplayJob, ReplayResult, Trace
+from .models import PromptVersion, ReplayJob, ReplayResult, ScenarioJob, ScenarioJobItem, Trace
 
 # Sync engine for Celery tasks
 sync_engine = create_engine(settings.database_url_sync)
@@ -97,6 +97,93 @@ def run_judge(
             "replayed_score": 0,
             "reasoning": f"Judge returned invalid response. Raw output: {result_text[:500]}",
         }
+
+
+@celery.task(name="run_scenarios")
+def run_scenarios_task(job_id: str):
+    with SyncSession() as db:
+        job = db.execute(select(ScenarioJob).where(ScenarioJob.id == uuid.UUID(job_id))).scalar_one()
+        job.status = "running"
+        db.commit()
+
+        # Get active version template
+        version = db.execute(
+            select(PromptVersion).where(PromptVersion.id == job.prompt_version_id)
+        ).scalar_one()
+
+        # Get model config
+        model_config = version.model_config_json or {}
+        model = model_config.get("model", settings.default_replay_model)
+        temperature = model_config.get("temperature", 0.7)
+        max_tokens = model_config.get("max_tokens", 1024)
+
+        # Get pending items
+        items = (
+            db.execute(
+                select(ScenarioJobItem).where(
+                    ScenarioJobItem.scenario_job_id == job.id,
+                    ScenarioJobItem.status == "pending",
+                )
+            )
+            .scalars()
+            .all()
+        )
+
+        for item in items:
+            try:
+                item.status = "running"
+                db.commit()
+
+                # Render template with variables
+                try:
+                    rendered = Template(version.content).render(**item.variables_json)
+                except Exception:
+                    rendered = version.content
+
+                # Build messages: system = rendered template, user = scenario message
+                messages = [
+                    {"role": "system", "content": rendered},
+                    {"role": "user", "content": item.message},
+                ]
+
+                # Call LLM
+                import time
+                start = time.time()
+                output = call_llm(messages, model=model, temperature=temperature, max_tokens=max_tokens)
+                latency_ms = int((time.time() - start) * 1000)
+
+                # Save as a real Trace (replay-compatible format)
+                trace = Trace(
+                    prompt_id=job.prompt_id,
+                    prompt_version_id=job.prompt_version_id,
+                    input={
+                        "messages": messages,
+                        "template_vars": item.variables_json,
+                    },
+                    output=output,
+                    model=model,
+                    latency_ms=latency_ms,
+                    metadata_json={"source": "scenario_builder", "role": item.role},
+                )
+                db.add(trace)
+                db.flush()
+
+                item.trace_id = trace.id
+                item.output_preview = output[:500] if output else ""
+                item.latency_ms = latency_ms
+                item.status = "success"
+                item.completed_at = datetime.now(UTC)
+
+            except Exception as e:
+                item.status = "failed"
+                item.error = str(e)[:1000]
+                item.completed_at = datetime.now(UTC)
+
+            db.commit()
+
+        job.status = "complete"
+        job.completed_at = datetime.now(UTC)
+        db.commit()
 
 
 @celery.task(name="run_replay")

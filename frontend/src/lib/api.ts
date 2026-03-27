@@ -101,6 +101,35 @@ export interface PlaygroundResponse {
   latency_ms: number;
 }
 
+export interface ScenarioItem {
+  role: string;
+  message: string;
+  variables: Record<string, string>;
+}
+
+export interface ScenarioJobItem {
+  id: string;
+  status: string;
+  role: string;
+  message: string;
+  trace_id: string | null;
+  output_preview: string;
+  latency_ms: number;
+  error: string | null;
+}
+
+export interface ScenarioJob {
+  id: string;
+  prompt_id: string;
+  prompt_version_id: string;
+  status: string;
+  total: number;
+  completed: number;
+  created_at: string;
+  completed_at: string | null;
+  items: ScenarioJobItem[];
+}
+
 export const api = {
   // Prompts
   listPrompts: () => request<PromptListItem[]>("/prompts"),
@@ -147,4 +176,17 @@ export const api = {
   getReplay: (jobId: string) => request<ReplayJob>(`/replay/${jobId}`),
   listReplays: (promptId?: string) =>
     request<ReplayJob[]>(`/replays${promptId ? `?prompt_id=${promptId}` : ""}`),
+
+  // Scenarios
+  generateScenarios: (promptId: string, data: { description: string; count: number }) =>
+    request<{ scenarios: ScenarioItem[] }>(`/prompts/${promptId}/generate-scenarios`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  runScenarios: (promptId: string, data: { scenarios: ScenarioItem[] }) =>
+    request<{ job_id: string }>(`/prompts/${promptId}/run-scenarios`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  getScenarioJob: (jobId: string) => request<ScenarioJob>(`/scenario-jobs/${jobId}`),
 };

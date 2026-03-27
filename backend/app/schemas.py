@@ -154,3 +154,54 @@ class PlaygroundRequest(BaseModel):
 class PlaygroundResponse(BaseModel):
     output: str
     latency_ms: int
+
+
+# Scenario schemas
+class GenerateScenariosRequest(BaseModel):
+    description: str = Field(..., min_length=1)
+    count: int = Field(default=10, ge=1, le=50)
+
+
+class ScenarioItem(BaseModel):
+    role: str
+    message: str
+    variables: dict = Field(default_factory=dict)
+
+
+class GenerateScenariosResponse(BaseModel):
+    scenarios: list[ScenarioItem]
+
+
+class RunScenariosRequest(BaseModel):
+    scenarios: list[ScenarioItem] = Field(..., min_length=1, max_length=50)
+
+
+class RunScenariosResponse(BaseModel):
+    job_id: UUID
+
+
+class ScenarioJobItemOut(BaseModel):
+    id: UUID
+    status: str
+    role: str
+    message: str
+    trace_id: UUID | None
+    output_preview: str
+    latency_ms: int
+    error: str | None
+
+    model_config = {"from_attributes": True}
+
+
+class ScenarioJobOut(BaseModel):
+    id: UUID
+    prompt_id: UUID
+    prompt_version_id: UUID
+    status: str
+    total: int
+    completed: int = 0
+    created_at: datetime
+    completed_at: datetime | None
+    items: list[ScenarioJobItemOut] = []
+
+    model_config = {"from_attributes": True}

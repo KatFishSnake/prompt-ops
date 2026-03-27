@@ -103,6 +103,46 @@ class ReplayJob(Base):
     results: Mapped[list["ReplayResult"]] = relationship(back_populates="job")
 
 
+class ScenarioJob(Base):
+    __tablename__ = "scenario_jobs"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    prompt_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("prompts.id"), nullable=False
+    )
+    prompt_version_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("prompt_versions.id"), nullable=False
+    )
+    status: Mapped[str] = mapped_column(String(20), default="pending")
+    total: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    items: Mapped[list["ScenarioJobItem"]] = relationship(back_populates="job")
+
+
+class ScenarioJobItem(Base):
+    __tablename__ = "scenario_job_items"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    scenario_job_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("scenario_jobs.id"), nullable=False
+    )
+    status: Mapped[str] = mapped_column(String(20), default="pending")
+    role: Mapped[str] = mapped_column(String(255), default="")
+    message: Mapped[str] = mapped_column(Text, default="")
+    variables_json: Mapped[dict] = mapped_column("variables", JSON, default=dict)
+    trace_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("traces.id"), nullable=True
+    )
+    output_preview: Mapped[str] = mapped_column(Text, default="")
+    latency_ms: Mapped[int] = mapped_column(Integer, default=0)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    job: Mapped["ScenarioJob"] = relationship(back_populates="items")
+
+
 class ReplayResult(Base):
     __tablename__ = "replay_results"
 

@@ -5,6 +5,7 @@ import { use, useEffect, useState } from "react";
 import { DiffView } from "@/components/DiffView";
 import { IntegrationPanel } from "@/components/IntegrationPanel";
 import { Playground } from "@/components/Playground";
+import { ScenarioBuilder } from "@/components/ScenarioBuilder";
 import { api, type Prompt, type PromptVersion } from "@/lib/api";
 
 export default function PromptDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -329,6 +330,12 @@ export default function PromptDetailPage({ params }: { params: Promise<{ id: str
           )}
         </div>
       </div>
+
+      {/* Scenario Builder */}
+      <ScenarioBuilder
+        promptId={prompt.id}
+        activeVersionNumber={activeVersion?.version_number ?? null}
+      />
 
       {/* Playground */}
       <Playground
