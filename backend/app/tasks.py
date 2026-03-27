@@ -66,7 +66,15 @@ def run_judge(
     )
 
     try:
-        result = json.loads(result_text)
+        # Strip markdown code fences if present (```json ... ```)
+        cleaned = result_text.strip()
+        if cleaned.startswith("```"):
+            cleaned = cleaned.split("\n", 1)[1] if "\n" in cleaned else cleaned[3:]
+            if cleaned.endswith("```"):
+                cleaned = cleaned[:-3]
+            cleaned = cleaned.strip()
+
+        result = json.loads(cleaned)
         score_a = float(result["score_a"])
         score_b = float(result["score_b"])
         reasoning = result.get("reasoning", "")

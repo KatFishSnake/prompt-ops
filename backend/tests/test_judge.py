@@ -36,3 +36,15 @@ def test_judge_handles_partial_json(monkeypatch):
     result = run_judge("system", "user input", "original", "replayed")
     assert result["original_score"] == 0
     assert result["replayed_score"] == 0
+
+
+def test_judge_strips_markdown_code_fences(monkeypatch):
+    def mock_call_llm(messages, model, temperature):
+        return '```json\n{"score_a": 4, "score_b": 9, "reasoning": "B is much better"}\n```'
+
+    monkeypatch.setattr("app.tasks.call_llm", mock_call_llm)
+
+    result = run_judge("system", "user input", "original", "replayed")
+    assert result["original_score"] in (4, 9)
+    assert result["replayed_score"] in (4, 9)
+    assert "better" in result["reasoning"]
