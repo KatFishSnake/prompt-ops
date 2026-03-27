@@ -30,7 +30,10 @@ export default function PromptsPage() {
       <Onboarding />
 
       <div className="flex items-center justify-between mb-6">
-        <h1 className="font-mono text-[28px] font-semibold">Prompts</h1>
+        <div>
+          <h1 className="font-mono text-[28px] font-semibold">Prompts</h1>
+          <p className="text-sm text-[var(--color-text-muted)] mt-1">Versioned templates for your AI models. Create, edit, and promote prompts to production.</p>
+        </div>
         <button
           onClick={() => setShowCreate(true)}
           className="px-4 py-2 bg-[var(--color-text-primary)] text-white font-mono text-sm font-medium hover:opacity-90 transition-opacity"

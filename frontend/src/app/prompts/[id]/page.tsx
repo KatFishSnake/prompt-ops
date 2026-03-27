@@ -227,6 +227,7 @@ export default function PromptDetailPage({ params }: { params: Promise<{ id: str
             rows={12}
             className="w-full px-4 py-3 border border-[var(--color-border)] bg-[var(--color-bg)] font-mono text-sm leading-relaxed resize-y focus:outline-none focus:border-[var(--color-accent)]"
             spellCheck={false}
+            placeholder={"Write your prompt template here.\n\nUse {{variable_name}} to insert dynamic values at runtime.\nExample: \"You are a helpful assistant for {{product_name}}.\"\n\nVariables are automatically detected and shown below.\nThey'll appear as inputs in the Playground and as template_vars in the API."}
           />
 
           {/* Detected variables */}
@@ -287,6 +288,11 @@ export default function PromptDetailPage({ params }: { params: Promise<{ id: str
                 className="w-24 px-3 py-2 border border-[var(--color-border)] bg-[var(--color-bg)] font-mono text-sm"
               />
             </div>
+          </div>
+          <div className="mt-3 px-3 py-2 bg-[var(--color-info-bg)] border border-blue-200 text-xs text-[var(--color-text-muted)]">
+            <span className="font-mono font-medium text-blue-700">Tip:</span>{" "}
+            <span className="font-mono text-blue-700">Temperature</span> controls randomness — use 0-0.3 for factual/deterministic tasks, 0.7-1.0 for creative writing.{" "}
+            <span className="font-mono text-blue-700">Max Tokens</span> caps the response length — 256 for short answers, 1024+ for long-form content.
           </div>
         </div>
 

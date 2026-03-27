@@ -18,7 +18,10 @@ export default function ReplaysPage() {
 
   return (
     <div className="p-6">
-      <h1 className="font-mono text-[28px] font-semibold mb-6">Replays</h1>
+      <div className="mb-6">
+        <h1 className="font-mono text-[28px] font-semibold">Replays</h1>
+        <p className="text-sm text-[var(--color-text-muted)] mt-1">Side-by-side comparisons of prompt versions tested against real traffic.</p>
+      </div>
 
       {loading ? (
         <div className="space-y-3">

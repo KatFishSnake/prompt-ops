@@ -3,7 +3,7 @@
 import { useState } from "react";
 
 export function IntegrationPanel({ promptName }: { promptName: string }) {
-  const [collapsed, setCollapsed] = useState(true);
+  const [collapsed, setCollapsed] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
 
   const origin = typeof window !== "undefined" ? window.location.origin : "http://localhost:8000";

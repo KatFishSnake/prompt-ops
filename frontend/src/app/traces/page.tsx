@@ -31,7 +31,10 @@ export default function TracesPage() {
 
   return (
     <div className="p-6">
-      <h1 className="font-mono text-[28px] font-semibold mb-6">Traces</h1>
+      <div className="mb-6">
+        <h1 className="font-mono text-[28px] font-semibold">Traces</h1>
+        <p className="text-sm text-[var(--color-text-muted)] mt-1">Real input/output pairs captured from your production AI calls.</p>
+      </div>
 
       {loading ? (
         <div className="space-y-3">

@@ -47,33 +47,6 @@ export function Onboarding() {
       ),
     },
     {
-      title: "We replayed 20 real traces against a new prompt. See what changed.",
-      body: "Side-by-side diffs show exactly how each response changed. Judge scores tell you if it got better or worse.",
-      actions: (
-        <div className="flex gap-3">
-          {seedReplayId && (
-            <button
-              type="button"
-              onClick={() => {
-                dismiss();
-                router.push(`/replay/${seedReplayId}`);
-              }}
-              className="px-4 py-2 bg-[var(--color-text-primary)] text-white font-mono text-sm font-medium"
-            >
-              See Replay Results →
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={() => setStep(2)}
-            className="px-4 py-2 border border-[var(--color-border)] font-mono text-sm"
-          >
-            Next
-          </button>
-        </div>
-      ),
-    },
-    {
       title: "Try editing a prompt yourself.",
       body: "Open the playground to test your prompt live. See the LLM response in real time.",
       actions: (
@@ -92,7 +65,7 @@ export function Onboarding() {
           )}
           <button
             type="button"
-            onClick={() => setStep(3)}
+            onClick={() => setStep(2)}
             className="px-4 py-2 border border-[var(--color-border)] font-mono text-sm"
           >
             Next
@@ -104,7 +77,7 @@ export function Onboarding() {
       title: "Connect your app in 2 lines of code.",
       body: "Fetch the active prompt at runtime, send traces after each LLM call. The Integration panel on each prompt page has ready-to-copy code.",
       actions: (
-        <div className="flex gap-3">
+        <div className="flex flex-col gap-3">
           {seedPromptId && (
             <button
               type="button"
@@ -112,15 +85,64 @@ export function Onboarding() {
                 dismiss();
                 router.push(`/prompts/${seedPromptId}`);
               }}
-              className="px-4 py-2 bg-[var(--color-text-primary)] text-white font-mono text-sm font-medium"
+              className="w-full px-4 py-2 bg-[var(--color-text-primary)] text-white font-mono text-sm font-medium"
             >
               See Integration Guide →
             </button>
           )}
           <button
             type="button"
+            onClick={() => setStep(3)}
+            className="w-full px-4 py-2 border border-[var(--color-border)] font-mono text-sm"
+          >
+            Next
+          </button>
+        </div>
+      ),
+    },
+    {
+      title: "We replayed 20 real traces against a new prompt. See what changed.",
+      body: "Side-by-side diffs show exactly how each response changed. Judge scores tell you if it got better or worse.",
+      actions: (
+        <div className="flex flex-col gap-3">
+          {seedReplayId && (
+            <button
+              type="button"
+              onClick={() => {
+                dismiss();
+                router.push(`/replay/${seedReplayId}`);
+              }}
+              className="w-full px-4 py-2 bg-[var(--color-text-primary)] text-white font-mono text-sm font-medium"
+            >
+              See Replay Results →
+            </button>
+          )}
+          {seedPromptId && (
+            <button
+              type="button"
+              onClick={() => {
+                dismiss();
+                router.push(`/prompts/${seedPromptId}#playground`);
+              }}
+              className="w-full px-4 py-2 border border-[var(--color-border)] font-mono text-sm"
+            >
+              Open Playground →
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => {
+              dismiss();
+              router.push("/traces");
+            }}
+            className="w-full px-4 py-2 border border-[var(--color-border)] font-mono text-sm"
+          >
+            Browse Traces →
+          </button>
+          <button
+            type="button"
             onClick={dismiss}
-            className="px-4 py-2 border border-[var(--color-border)] font-mono text-sm"
+            className="w-full px-4 py-2 text-[var(--color-text-muted)] font-mono text-sm hover:text-[var(--color-text-primary)]"
           >
             Explore on my own
           </button>

@@ -19,7 +19,7 @@ export function Playground({
   const [response, setResponse] = useState<{ output: string; latency_ms: number } | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [collapsed, setCollapsed] = useState(true);
+  const [collapsed, setCollapsed] = useState(false);
 
   const handleSend = async () => {
     if (!userMessage.trim()) return;
