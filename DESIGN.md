@@ -631,14 +631,15 @@ Minor issues from adversarial review that were not fixed (cosmetic or V2 scope):
 
 | Review | Trigger | Why | Runs | Status | Findings |
 |--------|---------|-----|------|--------|----------|
-| CEO Review | `/plan-ceo-review` | Scope & strategy | 0 | — | — |
-| Codex Review | `/codex review` | Independent 2nd opinion | 1 | issues_found | 16 findings, 3 adopted |
+| CEO Review | `/plan-ceo-review` | Scope & strategy | 1 | CLEAR | 5 proposals, 5 accepted, 0 deferred. Mode: SELECTIVE_EXPANSION |
+| Codex Review | `/codex review` | Independent 2nd opinion | 2 | issues_found | Run 1: 16 findings, 3 adopted. Run 2: 10 findings, 3 adopted (playground draft content, onboarding order, cross-prompt replay bug) |
 | Eng Review | `/plan-eng-review` | Architecture & tests (required) | 2 | CLEAR | Run 1: 3 issues, 1 critical gap. Run 2: 1 fix (judge JSON), 0 critical gaps. |
 | Design Review | `/plan-design-review` | UI/UX gaps | 1 | CLEAR | score: 4/10 → 8/10, 5 decisions |
 
-**CODEX:** 3 findings adopted: judge temperature=0, Trace.prompt_version_id, is_active unique partial index.
+**CODEX:** Run 1: 3 findings adopted (judge temperature=0, Trace.prompt_version_id, is_active unique partial index). Run 2: 3 findings adopted (playground sends raw content not version_id, onboarding reordered for no-key reviewers, cross-prompt replay validation bug fix).
+**CEO SCOPE:** 5 accepted: inline playground, enhanced onboarding + integration guide, backend tests, Railway deploy, prompt diff view. See CEO plan: `~/.gstack/projects/KatFishSnake-prompt-ops/ceo-plans/2026-03-27-promptops-mvp.md`
 **UNRESOLVED:** 0 decisions outstanding. 0 critical gaps.
-**VERDICT:** ENG + DESIGN CLEARED — ready to implement.
+**VERDICT:** CEO + ENG + DESIGN CLEARED — ready to implement accepted scope.
 
 ---
 

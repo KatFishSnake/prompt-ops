@@ -1,0 +1,53 @@
+@import "tailwindcss";
+
+@theme {
+  --color-bg: #F8FAFC;
+  --color-surface: #FFFFFF;
+  --color-sidebar: #F1F5F9;
+  --color-text-primary: #0F172A;
+  --color-text-muted: #64748B;
+  --color-accent: #3B82F6;
+  --color-accent-hover: #2563EB;
+  --color-success: #34D399;
+  --color-danger: #F87171;
+  --color-warning: #FBBF24;
+  --color-info: #60A5FA;
+  --color-border: #CBD5E1;
+  --color-border-light: #E2E8F0;
+  --color-success-bg: #ECFDF5;
+  --color-warning-bg: #FFFBEB;
+  --color-error-bg: #FEF2F2;
+  --color-info-bg: #EFF6FF;
+}
+
+* {
+  border-radius: 0px !important;
+}
+
+body {
+  font-family: 'IBM Plex Sans', sans-serif;
+  background-color: var(--color-bg);
+  color: var(--color-text-primary);
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'IBM Plex Mono', monospace;
+}
+
+.font-mono {
+  font-family: 'IBM Plex Mono', monospace;
+}
+
+.font-sans {
+  font-family: 'IBM Plex Sans', sans-serif;
+}
+
+/* Label style */
+.label {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--color-text-muted);
+}

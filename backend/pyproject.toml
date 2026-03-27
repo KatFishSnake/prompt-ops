@@ -1,0 +1,40 @@
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = [
+  "E",     # pycodestyle errors
+  "W",     # pycodestyle warnings
+  "F",     # pyflakes
+  "I",     # isort
+  "N",     # pep8-naming
+  "UP",    # pyupgrade
+  "B",     # flake8-bugbear
+  "S",     # flake8-bandit (security)
+  "T20",   # flake8-print
+  "SIM",   # flake8-simplify
+  "TCH",   # flake8-type-checking
+  "RUF",   # ruff-specific rules
+]
+ignore = [
+  "S101",  # assert used (fine in tests/seeds)
+  "S104",  # binding to all interfaces (intentional in Docker)
+  "S603",  # subprocess without shell=True check
+  "S608",  # SQL injection (we use ORM)
+  "B008",  # function call in default arg (FastAPI Depends)
+  "E501",  # line too long (formatter handles this)
+  "E712",  # == True comparisons (required by SQLAlchemy column expressions)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"app/seed.py" = ["T20"]  # allow print in seed script
+"alembic/*" = ["UP", "I", "N"]  # alembic auto-generated
+"app/tasks.py" = ["S311"]  # random is fine for A/B position
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
