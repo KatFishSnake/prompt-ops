@@ -211,6 +211,11 @@ def run_replay_task(job_id: str):
         )
 
         for result in results:
+            # Check if user stopped the replay
+            db.refresh(job)
+            if job.status == "stopped":
+                break
+
             try:
                 trace = db.execute(select(Trace).where(Trace.id == result.trace_id)).scalar_one()
 
@@ -270,6 +275,8 @@ def run_replay_task(job_id: str):
 
             db.commit()
 
-        job.status = "complete"
-        job.completed_at = datetime.now(UTC)
-        db.commit()
+        # Only mark complete if not stopped by user
+        if job.status != "stopped":
+            job.status = "complete"
+            job.completed_at = datetime.now(UTC)
+            db.commit()

@@ -127,6 +127,30 @@ async def start_replay(body: ReplayRequest, db: AsyncSession = Depends(get_db)):
     return build_replay_job_out(job, results.scalars().all(), traces_map)
 
 
+@router.post("/replay/{job_id}/stop")
+async def stop_replay(job_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(ReplayJob).where(ReplayJob.id == job_id))
+    job = result.scalar_one_or_none()
+    if not job:
+        raise HTTPException(status_code=404, detail="Replay job not found")
+    if job.status not in ("pending", "running"):
+        raise HTTPException(status_code=400, detail="Replay is not running")
+
+    job.status = "stopped"
+
+    # Mark remaining pending results as skipped
+    pending_results = await db.execute(
+        select(ReplayResult).where(
+            ReplayResult.replay_job_id == job.id, ReplayResult.status == "pending"
+        )
+    )
+    for r in pending_results.scalars().all():
+        r.status = "skipped"
+
+    await db.commit()
+    return {"status": "stopped"}
+
+
 @router.get("/replay/{job_id}", response_model=ReplayJobOut)
 async def get_replay(job_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(ReplayJob).where(ReplayJob.id == job_id))

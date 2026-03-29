@@ -174,6 +174,8 @@ export const api = {
     target_version_id: string;
   }) => request<ReplayJob>("/replay", { method: "POST", body: JSON.stringify(data) }),
   getReplay: (jobId: string) => request<ReplayJob>(`/replay/${jobId}`),
+  stopReplay: (jobId: string) =>
+    request<{ status: string }>(`/replay/${jobId}/stop`, { method: "POST" }),
   listReplays: (promptId?: string) =>
     request<ReplayJob[]>(`/replays${promptId ? `?prompt_id=${promptId}` : ""}`),
 

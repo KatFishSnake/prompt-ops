@@ -11,6 +11,7 @@ export default function ReplayResultPage({ params }: { params: Promise<{ id: str
   const [prompt, setPrompt] = useState<Prompt | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [promoting, setPromoting] = useState(false);
+  const [stopping, setStopping] = useState(false);
   const [showPromoteConfirm, setShowPromoteConfirm] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
   const router = useRouter();
@@ -31,10 +32,10 @@ export default function ReplayResultPage({ params }: { params: Promise<{ id: str
 
   // Poll for updates if job is running
   useEffect(() => {
-    if (!job || job.status === "complete" || job.status === "failed") return;
+    if (!job || job.status === "complete" || job.status === "failed" || job.status === "stopped") return;
     const interval = setInterval(async () => {
       const j = await fetchJob();
-      if (j.status === "complete" || j.status === "failed") {
+      if (j.status === "complete" || j.status === "failed" || j.status === "stopped") {
         clearInterval(interval);
       }
     }, 2000);
@@ -87,6 +88,18 @@ export default function ReplayResultPage({ params }: { params: Promise<{ id: str
       </div>
     );
   }
+
+  const handleStop = async () => {
+    setStopping(true);
+    try {
+      await api.stopReplay(id);
+      await fetchJob();
+    } catch (err) {
+      showToastMsg(err instanceof Error ? err.message : "Failed to stop", "error");
+    } finally {
+      setStopping(false);
+    }
+  };
 
   const isRunning = job.status === "running" || job.status === "pending";
   const progress =
@@ -143,15 +156,30 @@ export default function ReplayResultPage({ params }: { params: Promise<{ id: str
           {targetVersion?.version_number || "?"}
         </h1>
         {isRunning && (
-          <p className="text-sm text-[var(--color-text-muted)] mt-1 font-mono">
-            {job.status === "pending"
-              ? "Starting replay..."
-              : `Replaying ${completedResults.length}/${job.trace_count} traces...`}
-          </p>
+          <div className="flex items-center gap-3 mt-1">
+            <p className="text-sm text-[var(--color-text-muted)] font-mono">
+              {job.status === "pending"
+                ? "Starting replay..."
+                : `Replaying ${completedResults.length}/${job.trace_count} traces...`}
+            </p>
+            <button
+              type="button"
+              onClick={handleStop}
+              disabled={stopping}
+              className="px-3 py-1 text-xs font-mono border border-red-200 text-red-500 hover:bg-[var(--color-error-bg)] disabled:opacity-50"
+            >
+              {stopping ? "Stopping..." : "■ Stop"}
+            </button>
+          </div>
         )}
         {job.status === "complete" && (
           <p className="text-sm text-[var(--color-text-muted)] mt-1 font-mono">
             Replay complete — {job.trace_count}/{job.trace_count} traces processed
+          </p>
+        )}
+        {job.status === "stopped" && (
+          <p className="text-sm text-[var(--color-text-muted)] mt-1 font-mono">
+            Stopped at {completedResults.length}/{job.trace_count} traces
           </p>
         )}
       </div>
@@ -236,7 +264,7 @@ export default function ReplayResultPage({ params }: { params: Promise<{ id: str
           </div>
         ) : (
           job.results
-            .filter((r) => r.status !== "pending")
+            .filter((r) => r.status !== "pending" && r.status !== "skipped")
             .map((result, idx) => (
               <div
                 key={result.id}
@@ -315,7 +343,7 @@ export default function ReplayResultPage({ params }: { params: Promise<{ id: str
       </div>
 
       {/* Sticky bottom bar - Promote */}
-      {job.status === "complete" && targetVersion && !targetVersion.is_active && (
+      {(job.status === "complete" || job.status === "stopped") && targetVersion && !targetVersion.is_active && (
         <div className="fixed bottom-0 left-[200px] right-0 bg-[var(--color-surface)] border-t border-[var(--color-border)] p-4 flex justify-center">
           <button
             onClick={() => setShowPromoteConfirm(true)}
