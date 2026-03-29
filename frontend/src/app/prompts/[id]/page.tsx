@@ -52,7 +52,13 @@ export default function PromptDetailPage({ params }: { params: Promise<{ id: str
     return [...new Set(matches.map((m) => m.replace(/[{}]/g, "")))];
   };
 
-  // Autosave: create a new version after 3s of inactivity if content changed
+  const buildModelConfig = () => ({
+    model: editModel,
+    temperature: parseFloat(editTemp),
+    max_tokens: parseInt(editMaxTokens, 10),
+  });
+
+  // Autosave: update current version in-place after 3s of inactivity
   const doAutoSave = useCallback(async () => {
     if (!prompt || !currentVersion || autoSavingRef.current) return;
     const contentChanged = editContent !== currentVersion.content;
@@ -66,17 +72,12 @@ export default function PromptDetailPage({ params }: { params: Promise<{ id: str
     autoSavingRef.current = true;
     setAutoSaveStatus("saving");
     try {
-      const version = await api.createVersion(prompt.id, {
+      await api.updateVersion(prompt.id, currentVersion.id, {
         content: editContent,
-        model_config: {
-          model: editModel,
-          temperature: parseFloat(editTemp),
-          max_tokens: parseInt(editMaxTokens, 10),
-        },
+        model_config: buildModelConfig(),
       });
       const updated = await api.getPrompt(prompt.id);
       setPrompt(updated);
-      setActiveTab(version.id);
       setAutoSaveStatus("saved");
       setTimeout(() => setAutoSaveStatus(""), 2000);
     } catch {
@@ -96,25 +97,42 @@ export default function PromptDetailPage({ params }: { params: Promise<{ id: str
     };
   }, [editContent, editModel, editTemp, editMaxTokens, doAutoSave]);
 
-  const handleSaveNew = async () => {
+  // Save: update current version in-place (explicit save button)
+  const handleSave = async () => {
+    if (!prompt || !currentVersion) return;
+    if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
+    setSaving(true);
+    try {
+      await api.updateVersion(prompt.id, currentVersion.id, {
+        content: editContent,
+        model_config: buildModelConfig(),
+      });
+      const updated = await api.getPrompt(prompt.id);
+      setPrompt(updated);
+      showToast("Saved", "success");
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Failed to save", "error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Create new version (explicit "+ New Version" button only)
+  const handleCreateVersion = async () => {
     if (!prompt) return;
     if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
     setSaving(true);
     try {
       const version = await api.createVersion(prompt.id, {
         content: editContent,
-        model_config: {
-          model: editModel,
-          temperature: parseFloat(editTemp),
-          max_tokens: parseInt(editMaxTokens, 10),
-        },
+        model_config: buildModelConfig(),
       });
       const updated = await api.getPrompt(prompt.id);
       setPrompt(updated);
       selectVersion(version);
-      showToast("Version saved", "success");
+      showToast(`v${version.version_number} created`, "success");
     } catch (err) {
-      showToast(err instanceof Error ? err.message : "Failed to save", "error");
+      showToast(err instanceof Error ? err.message : "Failed to create version", "error");
     } finally {
       setSaving(false);
     }
@@ -246,7 +264,7 @@ export default function PromptDetailPage({ params }: { params: Promise<{ id: str
         ))}
         <button
           type="button"
-          onClick={handleSaveNew}
+          onClick={handleCreateVersion}
           className="px-4 py-2 font-mono text-sm text-[var(--color-text-muted)] hover:text-[var(--color-accent)] border-b-2 border-transparent"
         >
           + New Version
@@ -357,11 +375,11 @@ export default function PromptDetailPage({ params }: { params: Promise<{ id: str
         <div className="border-t border-[var(--color-border)] p-4 flex gap-3">
           <button
             type="button"
-            onClick={handleSaveNew}
+            onClick={handleSave}
             disabled={saving}
             className="px-4 py-2 bg-[var(--color-text-primary)] text-white font-mono text-sm font-medium disabled:opacity-50"
           >
-            {saving ? "Saving..." : `Save as v${(prompt.versions.length || 0) + 1}`}
+            {saving ? "Saving..." : "Save"}
           </button>
 
           {currentVersion && !currentVersion.is_active && activeVersion && (

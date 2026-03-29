@@ -184,6 +184,29 @@ async def create_version(
     return version
 
 
+@router.put("/prompts/{prompt_id}/versions/{version_id}", response_model=PromptVersionOut)
+async def update_version(
+    prompt_id: uuid.UUID,
+    version_id: uuid.UUID,
+    body: PromptVersionCreate,
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(PromptVersion).where(
+            PromptVersion.id == version_id, PromptVersion.prompt_id == prompt_id
+        )
+    )
+    version = result.scalar_one_or_none()
+    if not version:
+        raise HTTPException(status_code=404, detail="Version not found")
+
+    version.content = body.content
+    version.model_config_json = body.model_config_json
+    await db.commit()
+    await db.refresh(version)
+    return version
+
+
 @router.post("/prompts/{prompt_id}/promote", response_model=PromptVersionOut)
 async def promote_version(
     prompt_id: uuid.UUID, body: PromoteRequest, db: AsyncSession = Depends(get_db)

@@ -162,6 +162,15 @@ export const api = {
       method: "POST",
       body: JSON.stringify(data),
     }),
+  updateVersion: (
+    promptId: string,
+    versionId: string,
+    data: { content: string; model_config: Record<string, unknown> },
+  ) =>
+    request<PromptVersion>(`/prompts/${promptId}/versions/${versionId}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
   promote: (promptId: string, versionId: string) =>
     request<PromptVersion>(`/prompts/${promptId}/promote`, {
       method: "POST",
