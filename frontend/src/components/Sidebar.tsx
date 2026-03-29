@@ -49,7 +49,7 @@ export function Sidebar() {
         </div>
       ))}
       <div className="mt-auto pt-4 text-[10px] font-mono text-[var(--color-text-muted)]">
-        v0.1.0
+        v{process.env.NEXT_PUBLIC_APP_VERSION}
       </div>
       </div>
     </nav>
