@@ -54,6 +54,7 @@ export interface Trace {
   id: string;
   prompt_id: string | null;
   prompt_version_id: string | null;
+  prompt_name: string | null;
   input: Record<string, unknown>;
   output: string;
   model: string;
@@ -94,6 +95,23 @@ export interface ReplayJob {
   failed: number;
   avg_original_score: number | null;
   avg_replayed_score: number | null;
+  prompt_name: string;
+  source_version_number: number | null;
+  target_version_number: number | null;
+}
+
+export interface JudgeDiscussResponse {
+  response: string;
+  suggested_prompt: string | null;
+}
+
+export interface RerunTraceResponse {
+  original_output: string;
+  replayed_output: string;
+  original_score: number | null;
+  replayed_score: number | null;
+  score_delta: number | null;
+  judge_reasoning: string;
 }
 
 export interface PlaygroundResponse {
@@ -149,6 +167,8 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ version_id: versionId }),
     }),
+  deletePrompt: (id: string) =>
+    request<{ status: string }>(`/prompts/${id}`, { method: "DELETE" }),
   playground: (
     promptId: string,
     data: {
@@ -191,4 +211,20 @@ export const api = {
       body: JSON.stringify(data),
     }),
   getScenarioJob: (jobId: string) => request<ScenarioJob>(`/scenario-jobs/${jobId}`),
+
+  // Judge chat
+  discussJudge: (jobId: string, resultId: string, messages: { role: string; content: string }[]) =>
+    request<JudgeDiscussResponse>(`/replay/${jobId}/results/${resultId}/discuss`, {
+      method: "POST",
+      body: JSON.stringify({ messages }),
+    }),
+  rerunTrace: (
+    jobId: string,
+    resultId: string,
+    data: { prompt_content: string; model_config?: Record<string, unknown> },
+  ) =>
+    request<RerunTraceResponse>(`/replay/${jobId}/results/${resultId}/rerun`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
 };

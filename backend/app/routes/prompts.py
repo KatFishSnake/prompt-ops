@@ -1,5 +1,6 @@
 import time
 import uuid
+from datetime import UTC, datetime
 
 import openai
 from fastapi import APIRouter, Depends, HTTPException
@@ -11,7 +12,7 @@ from sqlalchemy.orm import selectinload
 
 from ..config import settings
 from ..database import get_db
-from ..models import Prompt, PromptVersion, ReplayJob, ReplayResult
+from ..models import Prompt, PromptVersion, ReplayJob, ReplayResult, ScenarioJob
 from ..schemas import (
     PlaygroundRequest,
     PlaygroundResponse,
@@ -29,7 +30,9 @@ router = APIRouter()
 
 @router.post("/prompts", response_model=PromptOut)
 async def create_prompt(body: PromptCreate, db: AsyncSession = Depends(get_db)):
-    existing = await db.execute(select(Prompt).where(Prompt.name == body.name))
+    existing = await db.execute(
+        select(Prompt).where(Prompt.name == body.name, Prompt.deleted_at.is_(None))
+    )
     if existing.scalar_one_or_none():
         raise HTTPException(status_code=400, detail="Prompt name already exists")
 
@@ -56,7 +59,10 @@ async def create_prompt(body: PromptCreate, db: AsyncSession = Depends(get_db)):
 @router.get("/prompts", response_model=list[PromptListItem])
 async def list_prompts(db: AsyncSession = Depends(get_db)):
     result = await db.execute(
-        select(Prompt).options(selectinload(Prompt.versions)).order_by(Prompt.updated_at.desc())
+        select(Prompt)
+        .where(Prompt.deleted_at.is_(None))
+        .options(selectinload(Prompt.versions))
+        .order_by(Prompt.updated_at.desc())
     )
     prompts = result.scalars().all()
 
@@ -113,7 +119,9 @@ async def list_prompts(db: AsyncSession = Depends(get_db)):
 
 @router.get("/prompts/serve/{name}", response_model=ServeOut)
 async def serve_active(name: str, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Prompt).where(Prompt.name == name))
+    result = await db.execute(
+        select(Prompt).where(Prompt.name == name, Prompt.deleted_at.is_(None))
+    )
     prompt = result.scalar_one_or_none()
     if not prompt:
         raise HTTPException(status_code=404, detail="Prompt not found")
@@ -202,6 +210,38 @@ async def promote_version(
     await db.commit()
     await db.refresh(target)
     return target
+
+
+@router.delete("/prompts/{prompt_id}")
+async def delete_prompt(prompt_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(
+        select(Prompt).where(Prompt.id == prompt_id, Prompt.deleted_at.is_(None))
+    )
+    prompt = result.scalar_one_or_none()
+    if not prompt:
+        raise HTTPException(status_code=404, detail="Prompt not found")
+
+    # Block if running jobs exist
+    running_replays = await db.execute(
+        select(ReplayJob).where(
+            ReplayJob.prompt_id == prompt_id,
+            ReplayJob.status.in_(["pending", "running"]),
+        )
+    )
+    running_scenarios = await db.execute(
+        select(ScenarioJob).where(
+            ScenarioJob.prompt_id == prompt_id,
+            ScenarioJob.status.in_(["pending", "running"]),
+        )
+    )
+    if running_replays.scalar_one_or_none() or running_scenarios.scalar_one_or_none():
+        raise HTTPException(
+            status_code=400, detail="Stop running replay/scenario jobs before deleting"
+        )
+
+    prompt.deleted_at = datetime.now(UTC)
+    await db.commit()
+    return {"status": "deleted"}
 
 
 @router.post("/prompts/{prompt_id}/playground", response_model=PlaygroundResponse)

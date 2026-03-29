@@ -11,6 +11,8 @@ export default function PromptsPage() {
   const [prompts, setPrompts] = useState<PromptListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<PromptListItem | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -72,6 +74,7 @@ export default function PromptsPage() {
                 <th className="label text-left py-3 px-4">Versions</th>
                 <th className="label text-left py-3 px-4">Last Replay</th>
                 <th className="label text-left py-3 px-4">Updated</th>
+                <th className="label text-right py-3 px-4" />
               </tr>
             </thead>
             <tbody>
@@ -117,6 +120,18 @@ export default function PromptsPage() {
                   <td className="py-3 px-4 text-xs text-[var(--color-text-muted)] font-mono">
                     {new Date(p.updated_at).toLocaleDateString()}
                   </td>
+                  <td className="py-3 px-4 text-right">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDeleteTarget(p);
+                      }}
+                      className="px-2 py-1 text-[10px] font-mono border border-red-200 text-red-500 hover:bg-[var(--color-error-bg)]"
+                    >
+                      Delete
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -126,6 +141,46 @@ export default function PromptsPage() {
 
       {showCreate && (
         <CreatePromptDialog onClose={() => setShowCreate(false)} onCreated={handleCreated} />
+      )}
+
+      {deleteTarget && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center">
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] w-[440px] p-6">
+            <h2 className="font-mono text-lg font-semibold mb-3">Delete Prompt</h2>
+            <p className="text-sm text-[var(--color-text-muted)] mb-6">
+              Delete <strong>{deleteTarget.name}</strong>? This will hide it from the list.
+              Existing replays and traces will still be accessible.
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                type="button"
+                onClick={() => setDeleteTarget(null)}
+                className="px-4 py-2 border border-[var(--color-border)] font-mono text-sm"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  setDeleting(true);
+                  try {
+                    await api.deletePrompt(deleteTarget.id);
+                    setPrompts(prompts.filter((p) => p.id !== deleteTarget.id));
+                    setDeleteTarget(null);
+                  } catch (err) {
+                    alert(err instanceof Error ? err.message : "Failed to delete");
+                  } finally {
+                    setDeleting(false);
+                  }
+                }}
+                disabled={deleting}
+                className="px-4 py-2 bg-red-500 text-white font-mono text-sm font-medium disabled:opacity-50"
+              >
+                {deleting ? "Deleting..." : "Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

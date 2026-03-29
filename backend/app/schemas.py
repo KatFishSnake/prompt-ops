@@ -76,6 +76,7 @@ class TraceOut(BaseModel):
     id: UUID
     prompt_id: UUID | None
     prompt_version_id: UUID | None
+    prompt_name: str | None = None
     input: dict
     output: str
     model: str
@@ -127,6 +128,9 @@ class ReplayJobOut(BaseModel):
     failed: int = 0
     avg_original_score: float | None = None
     avg_replayed_score: float | None = None
+    prompt_name: str = ""
+    source_version_number: int | None = None
+    target_version_number: int | None = None
 
     model_config = {"from_attributes": True}
 
@@ -154,6 +158,32 @@ class PlaygroundRequest(BaseModel):
 class PlaygroundResponse(BaseModel):
     output: str
     latency_ms: int
+
+
+# Judge chat schemas
+class JudgeDiscussRequest(BaseModel):
+    messages: list[dict]
+
+
+class JudgeDiscussResponse(BaseModel):
+    response: str
+    suggested_prompt: str | None = None
+
+
+class RerunTraceRequest(BaseModel):
+    prompt_content: str
+    model_config_data: dict = Field(default_factory=dict, alias="model_config")
+
+    model_config = {"protected_namespaces": ()}
+
+
+class RerunTraceResponse(BaseModel):
+    original_output: str
+    replayed_output: str
+    original_score: float | None
+    replayed_score: float | None
+    score_delta: float | None
+    judge_reasoning: str
 
 
 # Scenario schemas

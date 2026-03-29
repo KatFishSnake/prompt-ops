@@ -1,8 +1,10 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { use, useCallback, useEffect, useState } from "react";
 import { DiffView } from "@/components/DiffView";
+import { JudgeChat } from "@/components/JudgeChat";
 import { api, type Prompt, type ReplayJob, type ReplayResult } from "@/lib/api";
 
 export default function ReplayResultPage({ params }: { params: Promise<{ id: string }> }) {
@@ -146,6 +148,17 @@ export default function ReplayResultPage({ params }: { params: Promise<{ id: str
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Breadcrumb */}
+      {prompt && (
+        <div className="text-xs font-mono text-[var(--color-text-muted)] mb-2">
+          <Link href="/" className="hover:underline hover:text-[var(--color-text-primary)]">Prompts</Link>
+          {" / "}
+          <Link href={`/prompts/${prompt.id}`} className="hover:underline hover:text-[var(--color-text-primary)]">{prompt.name}</Link>
+          {" / "}
+          <span>Replay v{sourceVersion?.version_number || "?"} → v{targetVersion?.version_number || "?"}</span>
         </div>
       )}
 
@@ -323,15 +336,16 @@ export default function ReplayResultPage({ params }: { params: Promise<{ id: str
                           sourceLabel={`v${sourceVersion?.version_number || "?"} (original)`}
                           targetLabel={`v${targetVersion?.version_number || "?"} (replayed)`}
                         />
-                        {result.judge_reasoning && (
-                          <details className="mt-3">
-                            <summary className="label cursor-pointer hover:text-[var(--color-text-primary)]">
-                              Judge Reasoning
-                            </summary>
-                            <div className="mt-2 text-sm text-[var(--color-text-muted)] bg-[var(--color-bg)] border border-[var(--color-border)] p-3">
-                              {result.judge_reasoning}
-                            </div>
-                          </details>
+                        {result.judge_reasoning && sourceVersion && targetVersion && (
+                          <JudgeChat
+                            jobId={id}
+                            resultId={result.id}
+                            promptId={job.prompt_id}
+                            initialReasoning={result.judge_reasoning}
+                            sourceVersion={sourceVersion}
+                            targetVersion={targetVersion}
+                            activeVersionId={sourceVersion.id}
+                          />
                         )}
                       </>
                     )}

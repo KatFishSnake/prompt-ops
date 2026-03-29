@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from ..database import get_db
 from ..models import Prompt, PromptVersion, Trace
@@ -56,7 +57,7 @@ async def list_traces(
     prompt_id: str | None = Query(None),
     db: AsyncSession = Depends(get_db),
 ):
-    query = select(Trace).order_by(Trace.created_at.desc())
+    query = select(Trace).options(selectinload(Trace.prompt)).order_by(Trace.created_at.desc())
 
     if prompt_name:
         result = await db.execute(select(Prompt).where(Prompt.name == prompt_name))
@@ -70,4 +71,19 @@ async def list_traces(
         query = query.where(Trace.prompt_id == prompt_id)
 
     result = await db.execute(query)
-    return result.scalars().all()
+    traces = result.scalars().all()
+    return [
+        TraceOut(
+            id=t.id,
+            prompt_id=t.prompt_id,
+            prompt_version_id=t.prompt_version_id,
+            prompt_name=t.prompt.name if t.prompt else None,
+            input=t.input,
+            output=t.output,
+            model=t.model,
+            latency_ms=t.latency_ms,
+            metadata_json=t.metadata_json,
+            created_at=t.created_at,
+        )
+        for t in traces
+    ]
