@@ -19,7 +19,7 @@ claude_status=0
 codex_status=0
 ran_any=0
 
-SANITIZED_REPO="$(echo "$REPO_ROOT" | sed 's|/|-|g; s|_|-|g')"
+SANITIZED_REPO="$(echo "$REPO_ROOT" | sed 's|/|-|g; s|_|-|g; s|\.|-|g')"
 CLAUDE_DIR="$HOME/.claude/projects/$SANITIZED_REPO"
 
 if [ -d "$CLAUDE_DIR" ]; then

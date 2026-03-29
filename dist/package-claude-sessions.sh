@@ -10,7 +10,7 @@ OUTPUT_DIR="${1:-$REPO_ROOT/dist}"
 OUTPUT_FILE="$OUTPUT_DIR/claude-sessions-$TIMESTAMP.tar.gz"
 
 # Sanitize repo path: replace / and _ with -
-SANITIZED=$(echo "$REPO_ROOT" | sed 's|/|-|g; s|_|-|g')
+SANITIZED=$(echo "$REPO_ROOT" | sed 's|/|-|g; s|_|-|g; s|\.|-|g')
 CLAUDE_DIR="$HOME/.claude/projects/$SANITIZED"
 
 if [ ! -d "$CLAUDE_DIR" ]; then
