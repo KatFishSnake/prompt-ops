@@ -12,5 +12,5 @@ pydantic==2.9.2
 pydantic-settings==2.5.2
 sse-starlette==2.1.3
 httpx==0.27.2
-resend==2.5.0
+resend==2.5.1
 PyJWT==2.9.0
