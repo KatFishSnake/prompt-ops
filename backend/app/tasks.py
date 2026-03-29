@@ -152,8 +152,9 @@ def run_scenarios_task(job_id: str):
                 output = call_llm(messages, model=model, temperature=temperature, max_tokens=max_tokens)
                 latency_ms = int((time.time() - start) * 1000)
 
-                # Save as a real Trace (replay-compatible format)
+                # Save as a real Trace (replay-compatible format, propagate user_id)
                 trace = Trace(
+                    user_id=job.user_id,
                     prompt_id=job.prompt_id,
                     prompt_version_id=job.prompt_version_id,
                     input={

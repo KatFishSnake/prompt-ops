@@ -34,6 +34,10 @@ services:
       DATABASE_URL_SYNC: postgresql://promptops:promptops@postgres:5432/promptops
       REDIS_URL: redis://redis:6379/0
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-prod}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      DEV_AUTH_EMAIL: ${DEV_AUTH_EMAIL:-dev@local.test}
+      FRONTEND_URL: http://localhost:3000
     depends_on:
       postgres:
         condition: service_healthy
@@ -50,6 +54,10 @@ services:
       DATABASE_URL_SYNC: postgresql://promptops:promptops@postgres:5432/promptops
       REDIS_URL: redis://redis:6379/0
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-prod}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      DEV_AUTH_EMAIL: ${DEV_AUTH_EMAIL:-dev@local.test}
+      FRONTEND_URL: http://localhost:3000
     depends_on:
       postgres:
         condition: service_healthy

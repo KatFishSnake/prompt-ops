@@ -3,13 +3,23 @@ const API_BASE = typeof window !== "undefined" ? "/api" : "http://backend:8000/a
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     headers: { "Content-Type": "application/json", ...options?.headers },
+    credentials: "include",
     ...options,
   });
+  if (res.status === 401 && typeof window !== "undefined") {
+    window.location.href = "/login";
+    throw new Error("Not authenticated");
+  }
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
     throw new Error(err.detail || "Request failed");
   }
   return res.json();
+}
+
+export interface AuthUser {
+  email: string;
+  api_key: string;
 }
 
 export interface PromptVersion {
@@ -149,6 +159,13 @@ export interface ScenarioJob {
 }
 
 export const api = {
+  // Auth
+  getMe: () => request<AuthUser>("/auth/me"),
+  logout: () =>
+    fetch(`${API_BASE}/auth/logout`, { method: "POST", credentials: "include" }).then(() => {
+      window.location.href = "/login";
+    }),
+
   // Prompts
   listPrompts: () => request<PromptListItem[]>("/prompts"),
   getPrompt: (id: string) => request<Prompt>(`/prompts/${id}`),

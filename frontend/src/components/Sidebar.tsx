@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
+import { api } from "@/lib/api";
 
 const NAV_ITEMS = [
   {
@@ -16,6 +18,14 @@ const NAV_ITEMS = [
 
 export function Sidebar() {
   const pathname = usePathname();
+  const [email, setEmail] = useState<string | null>(null);
+
+  useEffect(() => {
+    api.getMe().then((u) => setEmail(u.email)).catch(() => {});
+  }, []);
+
+  // Don't render sidebar on login page
+  if (pathname === "/login") return null;
 
   return (
     <nav className="w-[200px] min-h-screen border-r border-[var(--color-border)] bg-[var(--color-sidebar)] flex flex-col p-4 shrink-0">
@@ -48,8 +58,22 @@ export function Sidebar() {
           })}
         </div>
       ))}
-      <div className="mt-auto pt-4 text-[10px] font-mono text-[var(--color-text-muted)]">
-        v{process.env.NEXT_PUBLIC_APP_VERSION}
+      <div className="mt-auto pt-4 border-t border-[var(--color-border-light)]">
+        {email && (
+          <div className="mb-2">
+            <div className="text-[10px] font-mono text-[var(--color-text-muted)] truncate">{email}</div>
+            <button
+              type="button"
+              onClick={() => api.logout()}
+              className="text-[10px] font-mono text-red-500 hover:text-red-600 mt-1"
+            >
+              Logout
+            </button>
+          </div>
+        )}
+        <div className="text-[10px] font-mono text-[var(--color-text-muted)]">
+          v{process.env.NEXT_PUBLIC_APP_VERSION}
+        </div>
       </div>
       </div>
     </nav>

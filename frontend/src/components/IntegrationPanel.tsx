@@ -1,10 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { api } from "@/lib/api";
 
 export function IntegrationPanel({ promptName }: { promptName: string }) {
   const [collapsed, setCollapsed] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
+  const [apiKey, setApiKey] = useState<string>("");
+
+  useEffect(() => {
+    api.getMe().then((u) => setApiKey(u.api_key)).catch(() => {});
+  }, []);
 
   const origin = typeof window !== "undefined" ? window.location.origin : "http://localhost:8000";
   const apiBase = origin.includes("3000") ? origin.replace("3000", "8000") : origin;
@@ -12,16 +18,19 @@ export function IntegrationPanel({ promptName }: { promptName: string }) {
   const serveUrl = `${apiBase}/api/prompts/serve/${promptName}`;
   const traceSnippet = `curl -X POST ${apiBase}/api/traces \\
   -H "Content-Type: application/json" \\
+  -H "X-API-Key: ${apiKey || "YOUR_API_KEY"}" \\
   -d '{"traces": [{"prompt_name": "${promptName}", "input": {"messages": [{"role": "system", "content": "..."}, {"role": "user", "content": "Hello"}], "template_vars": {}}, "output": "Response here", "model": "gpt-4o-mini", "latency_ms": 500}]}'`;
 
   const pythonSnippet = `import requests
 
+HEADERS = {"X-API-Key": "${apiKey || "YOUR_API_KEY"}"}
+
 # Fetch the active prompt
-prompt = requests.get("${serveUrl}").json()
+prompt = requests.get("${serveUrl}", headers=HEADERS).json()
 print(prompt["content"])  # Your prompt template
 
 # After calling your LLM, send the trace back
-requests.post("${apiBase}/api/traces", json={"traces": [{
+requests.post("${apiBase}/api/traces", headers=HEADERS, json={"traces": [{
     "prompt_name": "${promptName}",
     "input": {"messages": [...], "template_vars": {...}},
     "output": "LLM response",

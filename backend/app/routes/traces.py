@@ -3,26 +3,34 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from ..auth import get_api_key_user, get_current_user
 from ..database import get_db
-from ..models import Prompt, PromptVersion, Trace
+from ..models import Prompt, PromptVersion, Trace, User
 from ..schemas import TraceBatchInput, TraceOut
 
 router = APIRouter()
 
 
 @router.post("/traces", response_model=list[TraceOut])
-async def ingest_traces(body: TraceBatchInput, db: AsyncSession = Depends(get_db)):
+async def ingest_traces(
+    body: TraceBatchInput,
+    db: AsyncSession = Depends(get_db),
+    api_key_user: User = Depends(get_api_key_user),
+):
     traces = []
     for t in body.traces:
         prompt_id = None
         prompt_version_id = None
 
         if t.prompt_name:
-            result = await db.execute(select(Prompt).where(Prompt.name == t.prompt_name))
+            result = await db.execute(
+                select(Prompt).where(
+                    Prompt.name == t.prompt_name, Prompt.user_id == api_key_user.id
+                )
+            )
             prompt = result.scalar_one_or_none()
             if prompt:
                 prompt_id = prompt.id
-                # Find active version
                 version_result = await db.execute(
                     select(PromptVersion).where(
                         PromptVersion.prompt_id == prompt.id,
@@ -34,6 +42,7 @@ async def ingest_traces(body: TraceBatchInput, db: AsyncSession = Depends(get_db
                     prompt_version_id = active_version.id
 
         trace = Trace(
+            user_id=api_key_user.id,
             prompt_id=prompt_id,
             prompt_version_id=prompt_version_id,
             input=t.input,
@@ -56,11 +65,19 @@ async def list_traces(
     prompt_name: str | None = Query(None),
     prompt_id: str | None = Query(None),
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    query = select(Trace).options(selectinload(Trace.prompt)).order_by(Trace.created_at.desc())
+    query = (
+        select(Trace)
+        .where(Trace.user_id == current_user.id)
+        .options(selectinload(Trace.prompt))
+        .order_by(Trace.created_at.desc())
+    )
 
     if prompt_name:
-        result = await db.execute(select(Prompt).where(Prompt.name == prompt_name))
+        result = await db.execute(
+            select(Prompt).where(Prompt.name == prompt_name, Prompt.user_id == current_user.id)
+        )
         prompt = result.scalar_one_or_none()
         if prompt:
             query = query.where(Trace.prompt_id == prompt.id)

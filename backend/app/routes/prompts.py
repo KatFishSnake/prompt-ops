@@ -10,9 +10,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from ..auth import get_api_key_user, get_current_user
 from ..config import settings
 from ..database import get_db
-from ..models import Prompt, PromptVersion, ReplayJob, ReplayResult, ScenarioJob
+from ..models import Prompt, PromptVersion, ReplayJob, ReplayResult, ScenarioJob, User
 from ..schemas import (
     PlaygroundRequest,
     PlaygroundResponse,
@@ -29,14 +30,14 @@ router = APIRouter()
 
 
 @router.post("/prompts", response_model=PromptOut)
-async def create_prompt(body: PromptCreate, db: AsyncSession = Depends(get_db)):
+async def create_prompt(body: PromptCreate, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     existing = await db.execute(
-        select(Prompt).where(Prompt.name == body.name, Prompt.deleted_at.is_(None))
+        select(Prompt).where(Prompt.name == body.name, Prompt.deleted_at.is_(None), Prompt.user_id == current_user.id)
     )
     if existing.scalar_one_or_none():
         raise HTTPException(status_code=400, detail="Prompt name already exists")
 
-    prompt = Prompt(name=body.name, description=body.description)
+    prompt = Prompt(name=body.name, description=body.description, user_id=current_user.id)
     db.add(prompt)
     await db.flush()
 
@@ -57,10 +58,11 @@ async def create_prompt(body: PromptCreate, db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/prompts", response_model=list[PromptListItem])
-async def list_prompts(db: AsyncSession = Depends(get_db)):
+async def list_prompts(db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     result = await db.execute(
         select(Prompt)
         .where(Prompt.deleted_at.is_(None))
+        .where(Prompt.user_id == current_user.id)
         .options(selectinload(Prompt.versions))
         .order_by(Prompt.updated_at.desc())
     )
@@ -118,9 +120,9 @@ async def list_prompts(db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/prompts/serve/{name}", response_model=ServeOut)
-async def serve_active(name: str, db: AsyncSession = Depends(get_db)):
+async def serve_active(name: str, db: AsyncSession = Depends(get_db), api_key_user: User = Depends(get_api_key_user)):
     result = await db.execute(
-        select(Prompt).where(Prompt.name == name, Prompt.deleted_at.is_(None))
+        select(Prompt).where(Prompt.name == name, Prompt.deleted_at.is_(None), Prompt.user_id == api_key_user.id)
     )
     prompt = result.scalar_one_or_none()
     if not prompt:
@@ -144,9 +146,9 @@ async def serve_active(name: str, db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/prompts/{prompt_id}", response_model=PromptOut)
-async def get_prompt(prompt_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+async def get_prompt(prompt_id: uuid.UUID, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     result = await db.execute(
-        select(Prompt).where(Prompt.id == prompt_id).options(selectinload(Prompt.versions))
+        select(Prompt).where(Prompt.id == prompt_id, Prompt.user_id == current_user.id).options(selectinload(Prompt.versions))
     )
     prompt = result.scalar_one_or_none()
     if not prompt:
@@ -156,9 +158,9 @@ async def get_prompt(prompt_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
 
 @router.post("/prompts/{prompt_id}/versions", response_model=PromptVersionOut)
 async def create_version(
-    prompt_id: uuid.UUID, body: PromptVersionCreate, db: AsyncSession = Depends(get_db)
+    prompt_id: uuid.UUID, body: PromptVersionCreate, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)
 ):
-    result = await db.execute(select(Prompt).where(Prompt.id == prompt_id))
+    result = await db.execute(select(Prompt).where(Prompt.id == prompt_id, Prompt.user_id == current_user.id))
     prompt = result.scalar_one_or_none()
     if not prompt:
         raise HTTPException(status_code=404, detail="Prompt not found")
@@ -190,7 +192,15 @@ async def update_version(
     version_id: uuid.UUID,
     body: PromptVersionCreate,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
+    # Verify prompt ownership
+    prompt_result = await db.execute(
+        select(Prompt).where(Prompt.id == prompt_id, Prompt.user_id == current_user.id)
+    )
+    if not prompt_result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Prompt not found")
+
     result = await db.execute(
         select(PromptVersion).where(
             PromptVersion.id == version_id, PromptVersion.prompt_id == prompt_id
@@ -209,8 +219,15 @@ async def update_version(
 
 @router.post("/prompts/{prompt_id}/promote", response_model=PromptVersionOut)
 async def promote_version(
-    prompt_id: uuid.UUID, body: PromoteRequest, db: AsyncSession = Depends(get_db)
+    prompt_id: uuid.UUID, body: PromoteRequest, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)
 ):
+    # Verify prompt ownership
+    prompt_result = await db.execute(
+        select(Prompt).where(Prompt.id == prompt_id, Prompt.user_id == current_user.id)
+    )
+    if not prompt_result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Prompt not found")
+
     result = await db.execute(
         select(PromptVersion).where(
             PromptVersion.prompt_id == prompt_id, PromptVersion.is_active == True
@@ -236,9 +253,9 @@ async def promote_version(
 
 
 @router.delete("/prompts/{prompt_id}")
-async def delete_prompt(prompt_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+async def delete_prompt(prompt_id: uuid.UUID, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     result = await db.execute(
-        select(Prompt).where(Prompt.id == prompt_id, Prompt.deleted_at.is_(None))
+        select(Prompt).where(Prompt.id == prompt_id, Prompt.deleted_at.is_(None), Prompt.user_id == current_user.id)
     )
     prompt = result.scalar_one_or_none()
     if not prompt:
@@ -268,7 +285,7 @@ async def delete_prompt(prompt_id: uuid.UUID, db: AsyncSession = Depends(get_db)
 
 
 @router.post("/prompts/{prompt_id}/playground", response_model=PlaygroundResponse)
-async def playground(prompt_id: uuid.UUID, body: PlaygroundRequest):
+async def playground(prompt_id: uuid.UUID, body: PlaygroundRequest, current_user: User = Depends(get_current_user)):
     if not settings.openai_api_key:
         raise HTTPException(
             status_code=400,

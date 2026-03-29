@@ -11,6 +11,10 @@ class Settings(BaseSettings):
     max_concurrent_replays: int = 5
     replay_timeout: int = 30
     replay_max_retries: int = 2
+    jwt_secret: str = "change-me-in-production"
+    resend_api_key: str = ""
+    dev_auth_email: str = ""
+    frontend_url: str = "http://localhost:3000"
 
     class Config:
         env_file = ".env"

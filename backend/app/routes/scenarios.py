@@ -8,9 +8,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from ..auth import get_current_user
 from ..config import settings
 from ..database import get_db
-from ..models import Prompt, PromptVersion, ScenarioJob, ScenarioJobItem
+from ..models import Prompt, PromptVersion, ScenarioJob, ScenarioJobItem, User
 from ..schemas import (
     GenerateScenariosRequest,
     GenerateScenariosResponse,
@@ -54,7 +55,7 @@ def extract_template_variables(content: str) -> list[str]:
 
 @router.post("/prompts/{prompt_id}/generate-scenarios", response_model=GenerateScenariosResponse)
 async def generate_scenarios(
-    prompt_id: uuid.UUID, body: GenerateScenariosRequest, db: AsyncSession = Depends(get_db)
+    prompt_id: uuid.UUID, body: GenerateScenariosRequest, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)
 ):
     if not settings.openai_api_key:
         raise HTTPException(
@@ -62,8 +63,10 @@ async def generate_scenarios(
             detail="No API key configured. Add OPENAI_API_KEY to .env and restart.",
         )
 
-    # Get prompt
-    result = await db.execute(select(Prompt).where(Prompt.id == prompt_id))
+    # Get prompt (scoped by user)
+    result = await db.execute(
+        select(Prompt).where(Prompt.id == prompt_id, Prompt.user_id == current_user.id)
+    )
     prompt = result.scalar_one_or_none()
     if not prompt:
         raise HTTPException(status_code=404, detail="Prompt not found")
@@ -148,7 +151,7 @@ async def generate_scenarios(
 
 @router.post("/prompts/{prompt_id}/run-scenarios", response_model=RunScenariosResponse)
 async def run_scenarios(
-    prompt_id: uuid.UUID, body: RunScenariosRequest, db: AsyncSession = Depends(get_db)
+    prompt_id: uuid.UUID, body: RunScenariosRequest, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)
 ):
     if not settings.openai_api_key:
         raise HTTPException(
@@ -156,8 +159,10 @@ async def run_scenarios(
             detail="No API key configured. Add OPENAI_API_KEY to .env and restart.",
         )
 
-    # Get prompt
-    result = await db.execute(select(Prompt).where(Prompt.id == prompt_id))
+    # Get prompt (scoped by user)
+    result = await db.execute(
+        select(Prompt).where(Prompt.id == prompt_id, Prompt.user_id == current_user.id)
+    )
     prompt = result.scalar_one_or_none()
     if not prompt:
         raise HTTPException(status_code=404, detail="Prompt not found")
@@ -181,6 +186,7 @@ async def run_scenarios(
 
     # Create scenario job
     job = ScenarioJob(
+        user_id=current_user.id,
         prompt_id=prompt_id,
         prompt_version_id=target_version.id,
         status="pending",
@@ -210,10 +216,10 @@ async def run_scenarios(
 
 
 @router.get("/scenario-jobs/{job_id}", response_model=ScenarioJobOut)
-async def get_scenario_job(job_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+async def get_scenario_job(job_id: uuid.UUID, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     result = await db.execute(
         select(ScenarioJob)
-        .where(ScenarioJob.id == job_id)
+        .where(ScenarioJob.id == job_id, ScenarioJob.user_id == current_user.id)
         .options(selectinload(ScenarioJob.items))
     )
     job = result.scalar_one_or_none()

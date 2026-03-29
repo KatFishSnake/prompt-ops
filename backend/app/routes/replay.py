@@ -9,9 +9,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sse_starlette.sse import EventSourceResponse
 
+from ..auth import get_current_user
 from ..config import settings
 from ..database import async_session, get_db
-from ..models import Prompt, PromptVersion, ReplayJob, ReplayResult, Trace
+from ..models import Prompt, PromptVersion, ReplayJob, ReplayResult, Trace, User
 from ..schemas import (
     JudgeDiscussRequest,
     JudgeDiscussResponse,
@@ -93,9 +94,9 @@ def build_replay_job_out(
 
 
 @router.post("/replay", response_model=ReplayJobOut)
-async def start_replay(body: ReplayRequest, db: AsyncSession = Depends(get_db)):
+async def start_replay(body: ReplayRequest, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     # Validate prompt and versions exist
-    prompt = await db.execute(select(Prompt).where(Prompt.id == body.prompt_id))
+    prompt = await db.execute(select(Prompt).where(Prompt.id == body.prompt_id, Prompt.user_id == current_user.id))
     if not prompt.scalar_one_or_none():
         raise HTTPException(status_code=404, detail="Prompt not found")
 
@@ -121,6 +122,7 @@ async def start_replay(body: ReplayRequest, db: AsyncSession = Depends(get_db)):
         target_version_id=body.target_version_id,
         status="pending",
         trace_count=len(traces),
+        user_id=current_user.id,
     )
     db.add(job)
     await db.flush()
@@ -147,8 +149,8 @@ async def start_replay(body: ReplayRequest, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/replay/{job_id}/stop")
-async def stop_replay(job_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(ReplayJob).where(ReplayJob.id == job_id))
+async def stop_replay(job_id: uuid.UUID, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+    result = await db.execute(select(ReplayJob).where(ReplayJob.id == job_id, ReplayJob.user_id == current_user.id))
     job = result.scalar_one_or_none()
     if not job:
         raise HTTPException(status_code=404, detail="Replay job not found")
@@ -171,8 +173,8 @@ async def stop_replay(job_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/replay/{job_id}", response_model=ReplayJobOut)
-async def get_replay(job_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(ReplayJob).where(ReplayJob.id == job_id))
+async def get_replay(job_id: uuid.UUID, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+    result = await db.execute(select(ReplayJob).where(ReplayJob.id == job_id, ReplayJob.user_id == current_user.id))
     job = result.scalar_one_or_none()
     if not job:
         raise HTTPException(status_code=404, detail="Replay job not found")
@@ -192,7 +194,7 @@ async def get_replay(job_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/replay/{job_id}/stream")
-async def stream_replay(job_id: uuid.UUID):
+async def stream_replay(job_id: uuid.UUID, current_user: User = Depends(get_current_user)):
     async def event_generator():
         last_completed = 0
         while True:
@@ -200,6 +202,9 @@ async def stream_replay(job_id: uuid.UUID):
                 result = await db.execute(select(ReplayJob).where(ReplayJob.id == job_id))
                 job = result.scalar_one_or_none()
                 if not job:
+                    yield {"event": "error", "data": json.dumps({"error": "Job not found"})}
+                    return
+                if job.user_id != current_user.id:
                     yield {"event": "error", "data": json.dumps({"error": "Job not found"})}
                     return
 
@@ -289,8 +294,9 @@ async def stream_replay(job_id: uuid.UUID):
 async def list_replays(
     prompt_id: str | None = None,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    query = select(ReplayJob).order_by(ReplayJob.created_at.desc())
+    query = select(ReplayJob).where(ReplayJob.user_id == current_user.id).order_by(ReplayJob.created_at.desc())
     if prompt_id:
         query = query.where(ReplayJob.prompt_id == prompt_id)
 
@@ -359,6 +365,7 @@ async def discuss_judge(
     result_id: uuid.UUID,
     body: JudgeDiscussRequest,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     if not settings.openai_api_key:
         raise HTTPException(status_code=400, detail="No API key configured.")
@@ -369,7 +376,7 @@ async def discuss_judge(
     if not replay_result:
         raise HTTPException(status_code=404, detail="Result not found")
 
-    job_result = await db.execute(select(ReplayJob).where(ReplayJob.id == job_id))
+    job_result = await db.execute(select(ReplayJob).where(ReplayJob.id == job_id, ReplayJob.user_id == current_user.id))
     job = job_result.scalar_one_or_none()
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
@@ -422,9 +429,15 @@ async def rerun_trace(
     result_id: uuid.UUID,
     body: RerunTraceRequest,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     if not settings.openai_api_key:
         raise HTTPException(status_code=400, detail="No API key configured.")
+
+    # Verify job belongs to user
+    job_result = await db.execute(select(ReplayJob).where(ReplayJob.id == job_id, ReplayJob.user_id == current_user.id))
+    if not job_result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Replay job not found")
 
     # Fetch the original result and trace
     result = await db.execute(select(ReplayResult).where(ReplayResult.id == result_id))

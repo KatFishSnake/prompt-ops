@@ -5,7 +5,7 @@ from alembic import context
 from sqlalchemy import create_engine, engine_from_config, pool
 
 from app.database import Base
-from app.models import Prompt, PromptVersion, Trace, ReplayJob, ReplayResult, ScenarioJob, ScenarioJobItem  # noqa: F401
+from app.models import User, Prompt, PromptVersion, Trace, ReplayJob, ReplayResult, ScenarioJob, ScenarioJobItem  # noqa: F401
 
 config = context.config
 if config.config_file_name is not None:
