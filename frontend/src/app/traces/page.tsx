@@ -113,9 +113,14 @@ function TracesContent() {
                       className="cursor-pointer"
                       onClick={() => setExpanded(expanded === trace.id ? null : trace.id)}
                     >
-                      <div className="font-mono text-sm truncate max-w-[500px]">
-                        {getUserMessage(trace).slice(0, 80)}
-                        {getUserMessage(trace).length > 80 && "..."}
+                      <div className={`font-mono text-sm ${expanded === trace.id ? "" : "truncate max-w-[500px]"}`}>
+                        {expanded === trace.id
+                          ? getUserMessage(trace)
+                          : <>
+                              {getUserMessage(trace).slice(0, 80)}
+                              {getUserMessage(trace).length > 80 && "..."}
+                            </>
+                        }
                       </div>
                       {expanded === trace.id && (
                         <div className="mt-4 space-y-4">
