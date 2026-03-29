@@ -120,15 +120,19 @@ async def request_magic_link(body: MagicLinkRequest):
 
     if settings.resend_api_key:
         resend.api_key = settings.resend_api_key
-        resend.Emails.send({
-            "from": "PromptOps <onboarding@resend.dev>",
-            "to": [email],
-            "subject": "Your PromptOps login link",
-            "html": f'<p>Click to log in to PromptOps:</p><p><a href="{verify_url}">Log in to PromptOps</a></p><p>This link expires in 15 minutes.</p>',
-        })
+        try:
+            r = resend.Emails.send({
+                "from": "PromptOps <onboarding@resend.dev>",
+                "to": [email],
+                "subject": "Your PromptOps login link",
+                "html": f'<p>Click to log in to PromptOps:</p><p><a href="{verify_url}">Log in to PromptOps</a></p><p>This link expires in 15 minutes.</p>',
+            })
+            print(f"📧 Resend response: {r}")  # noqa: T201
+        except Exception as e:
+            print(f"❌ Resend error: {e}")  # noqa: T201
+            raise HTTPException(status_code=500, detail=f"Failed to send email: {e}") from e
     else:
-        # No Resend key — print to console for dev
-        print(f"\n🔗 Magic link for {email}: {verify_url}\n")
+        print(f"\n🔗 Magic link for {email}: {verify_url}\n")  # noqa: T201
 
     return {"status": "sent"}
 
