@@ -9,10 +9,12 @@ export function ScenarioBuilder({
   promptId,
   versionId,
   versionNumber,
+  onTracesGenerated,
 }: {
   promptId: string;
   versionId: string | null;
   versionNumber: number | null;
+  onTracesGenerated?: () => void;
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const [description, setDescription] = useState("");
@@ -59,6 +61,9 @@ export function ScenarioBuilder({
           if (pollRef.current) {
             clearInterval(pollRef.current);
             pollRef.current = null;
+          }
+          if (j.status === "complete") {
+            onTracesGenerated?.();
           }
         }
       } catch {}

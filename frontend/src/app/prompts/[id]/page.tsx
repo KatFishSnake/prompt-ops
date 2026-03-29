@@ -419,6 +419,7 @@ export default function PromptDetailPage({ params }: { params: Promise<{ id: str
         promptId={prompt.id}
         versionId={currentVersion?.id ?? null}
         versionNumber={currentVersion?.version_number ?? null}
+        onTracesGenerated={() => api.listTraces(prompt.id).then((t) => setTraceCount(t.length))}
       />
 
       {/* Playground */}
