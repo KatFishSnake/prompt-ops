@@ -6,7 +6,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     credentials: "include",
     ...options,
   });
-  if (res.status === 401 && typeof window !== "undefined") {
+  if (res.status === 401 && typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
     window.location.href = "/login";
     throw new Error("Not authenticated");
   }

@@ -20,12 +20,16 @@ export function Sidebar() {
   const pathname = usePathname();
   const [email, setEmail] = useState<string | null>(null);
 
-  useEffect(() => {
-    api.getMe().then((u) => setEmail(u.email)).catch(() => {});
-  }, []);
-
   // Don't render sidebar on login page
-  if (pathname === "/login") return null;
+  const isLogin = pathname === "/login";
+
+  useEffect(() => {
+    if (!isLogin) {
+      api.getMe().then((u) => setEmail(u.email)).catch(() => {});
+    }
+  }, [isLogin]);
+
+  if (isLogin) return null;
 
   return (
     <nav className="w-[200px] min-h-screen border-r border-[var(--color-border)] bg-[var(--color-sidebar)] flex flex-col p-4 shrink-0">
