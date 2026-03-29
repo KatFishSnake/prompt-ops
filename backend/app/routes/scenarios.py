@@ -62,23 +62,31 @@ async def generate_scenarios(
             detail="No API key configured. Add OPENAI_API_KEY to .env and restart.",
         )
 
-    # Get active version
+    # Get prompt
     result = await db.execute(select(Prompt).where(Prompt.id == prompt_id))
     prompt = result.scalar_one_or_none()
     if not prompt:
         raise HTTPException(status_code=404, detail="Prompt not found")
 
-    version_result = await db.execute(
-        select(PromptVersion).where(
-            PromptVersion.prompt_id == prompt_id, PromptVersion.is_active == True
+    # Use specified version or fall back to active
+    if body.version_id:
+        version_result = await db.execute(
+            select(PromptVersion).where(
+                PromptVersion.id == body.version_id, PromptVersion.prompt_id == prompt_id
+            )
         )
-    )
-    active_version = version_result.scalar_one_or_none()
-    if not active_version:
-        raise HTTPException(status_code=400, detail="No active version. Promote a version first.")
+    else:
+        version_result = await db.execute(
+            select(PromptVersion).where(
+                PromptVersion.prompt_id == prompt_id, PromptVersion.is_active == True
+            )
+        )
+    target_version = version_result.scalar_one_or_none()
+    if not target_version:
+        raise HTTPException(status_code=400, detail="Version not found.")
 
     # Extract template variables
-    variables = extract_template_variables(active_version.content)
+    variables = extract_template_variables(target_version.content)
     variables_str = ", ".join(variables) if variables else "none (no template variables used)"
 
     # Generate scenarios via LLM
@@ -148,25 +156,33 @@ async def run_scenarios(
             detail="No API key configured. Add OPENAI_API_KEY to .env and restart.",
         )
 
-    # Get active version
+    # Get prompt
     result = await db.execute(select(Prompt).where(Prompt.id == prompt_id))
     prompt = result.scalar_one_or_none()
     if not prompt:
         raise HTTPException(status_code=404, detail="Prompt not found")
 
-    version_result = await db.execute(
-        select(PromptVersion).where(
-            PromptVersion.prompt_id == prompt_id, PromptVersion.is_active == True
+    # Use specified version or fall back to active
+    if body.version_id:
+        version_result = await db.execute(
+            select(PromptVersion).where(
+                PromptVersion.id == body.version_id, PromptVersion.prompt_id == prompt_id
+            )
         )
-    )
-    active_version = version_result.scalar_one_or_none()
-    if not active_version:
-        raise HTTPException(status_code=400, detail="No active version. Promote a version first.")
+    else:
+        version_result = await db.execute(
+            select(PromptVersion).where(
+                PromptVersion.prompt_id == prompt_id, PromptVersion.is_active == True
+            )
+        )
+    target_version = version_result.scalar_one_or_none()
+    if not target_version:
+        raise HTTPException(status_code=400, detail="Version not found.")
 
     # Create scenario job
     job = ScenarioJob(
         prompt_id=prompt_id,
-        prompt_version_id=active_version.id,
+        prompt_version_id=target_version.id,
         status="pending",
         total=len(body.scenarios),
     )

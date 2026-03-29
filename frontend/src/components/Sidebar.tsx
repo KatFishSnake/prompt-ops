@@ -26,6 +26,7 @@ export function Sidebar() {
         PromptOps
       </Link>
 
+      <div className="flex-1 flex flex-col">
       {NAV_ITEMS.map((section) => (
         <div key={section.section} className="mb-6">
           <div className="label mb-3">{section.section}</div>
@@ -47,6 +48,10 @@ export function Sidebar() {
           })}
         </div>
       ))}
+      <div className="mt-auto pt-4 text-[10px] font-mono text-[var(--color-text-muted)]">
+        v0.1.0
+      </div>
+      </div>
     </nav>
   );
 }

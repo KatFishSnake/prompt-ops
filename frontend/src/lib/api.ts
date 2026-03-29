@@ -200,12 +200,12 @@ export const api = {
     request<ReplayJob[]>(`/replays${promptId ? `?prompt_id=${promptId}` : ""}`),
 
   // Scenarios
-  generateScenarios: (promptId: string, data: { description: string; count: number }) =>
+  generateScenarios: (promptId: string, data: { description: string; count: number; version_id?: string }) =>
     request<{ scenarios: ScenarioItem[] }>(`/prompts/${promptId}/generate-scenarios`, {
       method: "POST",
       body: JSON.stringify(data),
     }),
-  runScenarios: (promptId: string, data: { scenarios: ScenarioItem[] }) =>
+  runScenarios: (promptId: string, data: { scenarios: ScenarioItem[]; version_id?: string }) =>
     request<{ job_id: string }>(`/prompts/${promptId}/run-scenarios`, {
       method: "POST",
       body: JSON.stringify(data),

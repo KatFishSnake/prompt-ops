@@ -7,10 +7,12 @@ const STORAGE_KEY_PREFIX = "promptops-scenarios-";
 
 export function ScenarioBuilder({
   promptId,
-  activeVersionNumber,
+  versionId,
+  versionNumber,
 }: {
   promptId: string;
-  activeVersionNumber: number | null;
+  versionId: string | null;
+  versionNumber: number | null;
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const [description, setDescription] = useState("");
@@ -78,7 +80,7 @@ export function ScenarioBuilder({
     setGenerating(true);
     setError("");
     try {
-      const res = await api.generateScenarios(promptId, { description, count });
+      const res = await api.generateScenarios(promptId, { description, count, version_id: versionId || undefined });
       setScenarios(res.scenarios);
       setJobId(null);
       setJob(null);
@@ -93,7 +95,7 @@ export function ScenarioBuilder({
     if (scenarios.length === 0) return;
     setError("");
     try {
-      const res = await api.runScenarios(promptId, { scenarios });
+      const res = await api.runScenarios(promptId, { scenarios, version_id: versionId || undefined });
       setJobId(res.job_id);
       setJob(null);
     } catch (err) {
@@ -128,7 +130,7 @@ export function ScenarioBuilder({
   const isComplete = job?.status === "complete";
   const completedCount = job?.completed ?? 0;
 
-  if (!activeVersionNumber) {
+  if (!versionNumber) {
     return (
       <div className="border border-[var(--color-border)] bg-[var(--color-surface)] mt-4">
         <div className="px-4 py-3">
@@ -136,7 +138,7 @@ export function ScenarioBuilder({
         </div>
         <div className="border-t border-[var(--color-border)] p-4">
           <p className="text-sm text-[var(--color-text-muted)]">
-            Promote a version to active before generating scenarios.
+            Select a version above to generate scenarios.
           </p>
         </div>
       </div>
@@ -160,7 +162,7 @@ export function ScenarioBuilder({
           <div className="p-4">
             <p className="text-xs text-[var(--color-text-muted)] mb-3">
               Describe your use case and we'll generate diverse test scenarios to evaluate your
-              prompt. Scenarios run against v{activeVersionNumber} (active).
+              prompt. Scenarios run against v{versionNumber}.
             </p>
             <div className="flex gap-2">
               <input
@@ -292,7 +294,7 @@ export function ScenarioBuilder({
               {/* Run bar */}
               <div className="flex items-center justify-between px-4 py-3 border-t border-[var(--color-border)] bg-[var(--color-bg)]">
                 <span className="text-xs text-[var(--color-text-muted)] font-mono">
-                  {scenarios.length} scenarios · v{activeVersionNumber} (active)
+                  {scenarios.length} scenarios · v{versionNumber}
                 </span>
                 <button
                   type="button"
@@ -384,7 +386,7 @@ export function ScenarioBuilder({
               </div>
               <div className="flex items-center justify-between px-4 py-3 border-t border-[var(--color-border)] bg-[var(--color-bg)]">
                 <span className="text-xs text-[var(--color-text-muted)] font-mono">
-                  Traces saved to v{activeVersionNumber} (active)
+                  Traces saved to v{versionNumber}
                 </span>
                 <div className="flex gap-2">
                   <a

@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { use, useEffect, useState } from "react";
+import { use, useCallback, useEffect, useRef, useState } from "react";
 import { DiffView } from "@/components/DiffView";
 import { IntegrationPanel } from "@/components/IntegrationPanel";
 import { Playground } from "@/components/Playground";
@@ -21,6 +21,9 @@ export default function PromptDetailPage({ params }: { params: Promise<{ id: str
   const [showPromoteConfirm, setShowPromoteConfirm] = useState(false);
   const [replayLoading, setReplayLoading] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+  const [autoSaveStatus, setAutoSaveStatus] = useState<"" | "saving" | "saved">("");
+  const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autoSavingRef = useRef(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -49,8 +52,53 @@ export default function PromptDetailPage({ params }: { params: Promise<{ id: str
     return [...new Set(matches.map((m) => m.replace(/[{}]/g, "")))];
   };
 
+  // Autosave: create a new version after 3s of inactivity if content changed
+  const doAutoSave = useCallback(async () => {
+    if (!prompt || !currentVersion || autoSavingRef.current) return;
+    const contentChanged = editContent !== currentVersion.content;
+    const configChanged =
+      editModel !== ((currentVersion.model_config_json?.model as string) || "gpt-4o-mini") ||
+      editTemp !== String(currentVersion.model_config_json?.temperature ?? 0.7) ||
+      editMaxTokens !== String(currentVersion.model_config_json?.max_tokens ?? 1024);
+    if (!contentChanged && !configChanged) return;
+    if (!editContent.trim()) return;
+
+    autoSavingRef.current = true;
+    setAutoSaveStatus("saving");
+    try {
+      const version = await api.createVersion(prompt.id, {
+        content: editContent,
+        model_config: {
+          model: editModel,
+          temperature: parseFloat(editTemp),
+          max_tokens: parseInt(editMaxTokens, 10),
+        },
+      });
+      const updated = await api.getPrompt(prompt.id);
+      setPrompt(updated);
+      setActiveTab(version.id);
+      setAutoSaveStatus("saved");
+      setTimeout(() => setAutoSaveStatus(""), 2000);
+    } catch {
+      setAutoSaveStatus("");
+    } finally {
+      autoSavingRef.current = false;
+    }
+  }, [prompt, currentVersion, editContent, editModel, editTemp, editMaxTokens]);
+
+  useEffect(() => {
+    if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
+    autoSaveTimer.current = setTimeout(() => {
+      doAutoSave();
+    }, 3000);
+    return () => {
+      if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
+    };
+  }, [editContent, editModel, editTemp, editMaxTokens, doAutoSave]);
+
   const handleSaveNew = async () => {
     if (!prompt) return;
+    if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
     setSaving(true);
     try {
       const version = await api.createVersion(prompt.id, {
@@ -58,7 +106,7 @@ export default function PromptDetailPage({ params }: { params: Promise<{ id: str
         model_config: {
           model: editModel,
           temperature: parseFloat(editTemp),
-          max_tokens: parseInt(editMaxTokens),
+          max_tokens: parseInt(editMaxTokens, 10),
         },
       });
       const updated = await api.getPrompt(prompt.id);
@@ -221,7 +269,15 @@ export default function PromptDetailPage({ params }: { params: Promise<{ id: str
       {/* Editor */}
       <div className="border border-[var(--color-border)] bg-[var(--color-surface)]">
         <div className="p-4">
-          <label className="label block mb-2">Prompt Template</label>
+          <div className="flex items-center justify-between mb-2">
+            <label className="label">Prompt Template</label>
+            {autoSaveStatus === "saving" && (
+              <span className="text-[10px] font-mono text-[var(--color-text-muted)]">Saving...</span>
+            )}
+            {autoSaveStatus === "saved" && (
+              <span className="text-[10px] font-mono text-emerald-600">Saved</span>
+            )}
+          </div>
           <textarea
             value={editContent}
             onChange={(e) => setEditContent(e.target.value)}
@@ -334,7 +390,8 @@ export default function PromptDetailPage({ params }: { params: Promise<{ id: str
       {/* Scenario Builder */}
       <ScenarioBuilder
         promptId={prompt.id}
-        activeVersionNumber={activeVersion?.version_number ?? null}
+        versionId={currentVersion?.id ?? null}
+        versionNumber={currentVersion?.version_number ?? null}
       />
 
       {/* Playground */}

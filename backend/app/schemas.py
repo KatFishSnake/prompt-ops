@@ -190,6 +190,7 @@ class RerunTraceResponse(BaseModel):
 class GenerateScenariosRequest(BaseModel):
     description: str = Field(..., min_length=1)
     count: int = Field(default=10, ge=1, le=50)
+    version_id: UUID | None = None
 
 
 class ScenarioItem(BaseModel):
@@ -204,6 +205,7 @@ class GenerateScenariosResponse(BaseModel):
 
 class RunScenariosRequest(BaseModel):
     scenarios: list[ScenarioItem] = Field(..., min_length=1, max_length=50)
+    version_id: UUID | None = None
 
 
 class RunScenariosResponse(BaseModel):
