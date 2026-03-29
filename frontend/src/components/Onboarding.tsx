@@ -7,7 +7,6 @@ import { api, type PromptListItem } from "@/lib/api";
 export function Onboarding() {
   const [show, setShow] = useState(false);
   const [step, setStep] = useState(0);
-  const [seedReplayId, setSeedReplayId] = useState<string | null>(null);
   const [seedPromptId, setSeedPromptId] = useState<string | null>(null);
   const router = useRouter();
 
@@ -15,13 +14,9 @@ export function Onboarding() {
     const onboarded = localStorage.getItem("promptops-onboarded");
     if (!onboarded) {
       setShow(true);
-      api.listReplays().then((replays) => {
-        const completed = replays.find((r) => r.status === "complete");
-        if (completed) setSeedReplayId(completed.id);
-      });
       api.listPrompts().then((prompts: PromptListItem[]) => {
         if (prompts.length > 0) setSeedPromptId(prompts[0].id);
-      });
+      }).catch(() => {});
     }
   }, []);
 
@@ -34,8 +29,8 @@ export function Onboarding() {
 
   const steps = [
     {
-      title: "PromptOps manages your AI prompts in production.",
-      body: "Version prompts, test changes against real traffic, deploy with confidence.",
+      title: "Welcome to PromptOps.",
+      body: "Manage, test, and deploy AI prompts with confidence. Your workspace comes with demo prompts to get started.",
       actions: (
         <button
           type="button"
@@ -47,8 +42,8 @@ export function Onboarding() {
       ),
     },
     {
-      title: "Try editing a prompt yourself.",
-      body: "Open the playground to test your prompt live. See the LLM response in real time.",
+      title: "Generate test scenarios with AI.",
+      body: "Describe your use case, and we'll generate diverse test scenarios automatically. Run them to create real traces with actual LLM responses.",
       actions: (
         <div className="flex gap-3">
           {seedPromptId && (
@@ -56,11 +51,11 @@ export function Onboarding() {
               type="button"
               onClick={() => {
                 dismiss();
-                router.push(`/prompts/${seedPromptId}#playground`);
+                router.push(`/prompts/${seedPromptId}`);
               }}
               className="px-4 py-2 bg-[var(--color-text-primary)] text-white font-mono text-sm font-medium"
             >
-              Open Playground →
+              Try It →
             </button>
           )}
           <button
@@ -74,8 +69,35 @@ export function Onboarding() {
       ),
     },
     {
-      title: "Connect your app in 2 lines of code.",
-      body: "Fetch the active prompt at runtime, send traces after each LLM call. The Integration panel on each prompt page has ready-to-copy code.",
+      title: "Edit a prompt and replay against real traces.",
+      body: "Change your prompt, click Replay vs Active, and instantly see which responses improved, stayed the same, or regressed. Side-by-side diffs with judge scores.",
+      actions: (
+        <div className="flex gap-3">
+          {seedPromptId && (
+            <button
+              type="button"
+              onClick={() => {
+                dismiss();
+                router.push(`/prompts/${seedPromptId}`);
+              }}
+              className="px-4 py-2 bg-[var(--color-text-primary)] text-white font-mono text-sm font-medium"
+            >
+              Open a Prompt →
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => setStep(3)}
+            className="px-4 py-2 border border-[var(--color-border)] font-mono text-sm"
+          >
+            Next
+          </button>
+        </div>
+      ),
+    },
+    {
+      title: "Here's what you can do.",
+      body: "Your workspace is ready. Explore the demo prompts, generate scenarios, run replays, or connect your own app via the Integration panel.",
       actions: (
         <div className="flex flex-col gap-3">
           {seedPromptId && (
@@ -87,46 +109,7 @@ export function Onboarding() {
               }}
               className="w-full px-4 py-2 bg-[var(--color-text-primary)] text-white font-mono text-sm font-medium"
             >
-              See Integration Guide →
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={() => setStep(3)}
-            className="w-full px-4 py-2 border border-[var(--color-border)] font-mono text-sm"
-          >
-            Next
-          </button>
-        </div>
-      ),
-    },
-    {
-      title: "We replayed 20 real traces against a new prompt. See what changed.",
-      body: "Side-by-side diffs show exactly how each response changed. Judge scores tell you if it got better or worse.",
-      actions: (
-        <div className="flex flex-col gap-3">
-          {seedReplayId && (
-            <button
-              type="button"
-              onClick={() => {
-                dismiss();
-                router.push(`/replay/${seedReplayId}`);
-              }}
-              className="w-full px-4 py-2 bg-[var(--color-text-primary)] text-white font-mono text-sm font-medium"
-            >
-              See Replay Results →
-            </button>
-          )}
-          {seedPromptId && (
-            <button
-              type="button"
-              onClick={() => {
-                dismiss();
-                router.push(`/prompts/${seedPromptId}#playground`);
-              }}
-              className="w-full px-4 py-2 border border-[var(--color-border)] font-mono text-sm"
-            >
-              Open Playground →
+              Open Demo Prompt →
             </button>
           )}
           <button
