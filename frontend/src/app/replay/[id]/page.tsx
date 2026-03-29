@@ -129,8 +129,10 @@ export default function ReplayResultPage({ params }: { params: Promise<{ id: str
             <h2 className="font-mono text-lg font-semibold mb-3">Promote Version</h2>
             <p className="text-sm text-[var(--color-text-muted)] mb-6">
               Promote v{targetVersion.version_number} to active? This replaces{" "}
-              {sourceVersion ? `v${sourceVersion.version_number}` : "the current version"} for all
-              consumers of this prompt.
+              {prompt?.versions.find((v) => v.is_active)
+                ? `v${prompt.versions.find((v) => v.is_active)!.version_number}`
+                : "the current version"}{" "}
+              for all consumers of this prompt.
             </p>
             <div className="flex gap-3 justify-end">
               <button
