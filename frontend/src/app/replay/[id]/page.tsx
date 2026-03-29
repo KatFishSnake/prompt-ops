@@ -294,9 +294,14 @@ export default function ReplayResultPage({ params }: { params: Promise<{ id: str
                   <span className="font-mono text-xs text-[var(--color-text-muted)] w-8">
                     #{idx + 1}
                   </span>
-                  <span className="font-mono text-sm flex-1 truncate">
-                    {getUserMessage(result).slice(0, 60)}
-                    {getUserMessage(result).length > 60 && "..."}
+                  <span className={`font-mono text-sm flex-1 ${expanded === result.id ? "" : "truncate"}`}>
+                    {expanded === result.id
+                      ? getUserMessage(result)
+                      : <>
+                          {getUserMessage(result).slice(0, 60)}
+                          {getUserMessage(result).length > 60 && "..."}
+                        </>
+                    }
                   </span>
                   {result.status === "success" && result.score_delta != null ? (
                     <span

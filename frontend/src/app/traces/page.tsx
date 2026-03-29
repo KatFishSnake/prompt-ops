@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { api, type Trace, type PromptListItem } from "@/lib/api";
@@ -137,7 +138,17 @@ function TracesContent() {
                   {expanded !== trace.id && (
                     <>
                       <td className="py-3 px-4 font-mono text-xs text-[var(--color-text-muted)]">
-                        {trace.prompt_name || "—"}
+                        {trace.prompt_id ? (
+                          <Link
+                            href={`/prompts/${trace.prompt_id}`}
+                            className="hover:underline hover:text-[var(--color-text-primary)]"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {trace.prompt_name || "—"}
+                          </Link>
+                        ) : (
+                          "—"
+                        )}
                       </td>
                       <td className="py-3 px-4 font-mono text-xs text-[var(--color-text-muted)]">
                         {trace.model}

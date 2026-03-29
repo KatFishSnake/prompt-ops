@@ -21,6 +21,7 @@ export default function PromptDetailPage({ params }: { params: Promise<{ id: str
   const [showPromoteConfirm, setShowPromoteConfirm] = useState(false);
   const [replayLoading, setReplayLoading] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+  const [traceCount, setTraceCount] = useState<number | null>(null);
   const [autoSaveStatus, setAutoSaveStatus] = useState<"" | "saving" | "saved">("");
   const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autoSavingRef = useRef(false);
@@ -32,6 +33,7 @@ export default function PromptDetailPage({ params }: { params: Promise<{ id: str
       const active = p.versions.find((v) => v.is_active) || p.versions[0];
       if (active) selectVersion(active);
     });
+    api.listTraces(id).then((t) => setTraceCount(t.length));
   }, [id]);
 
   const selectVersion = (v: PromptVersion) => {
@@ -383,14 +385,21 @@ export default function PromptDetailPage({ params }: { params: Promise<{ id: str
           </button>
 
           {currentVersion && !currentVersion.is_active && activeVersion && (
-            <button
-              type="button"
-              onClick={handleReplay}
-              disabled={replayLoading}
-              className="px-4 py-2 bg-[var(--color-accent)] text-white font-mono text-sm font-medium disabled:opacity-50"
-            >
-              {replayLoading ? "Starting..." : "▶ Replay vs Active"}
-            </button>
+            <div className="relative group">
+              <button
+                type="button"
+                onClick={handleReplay}
+                disabled={replayLoading || traceCount === 0}
+                className="px-4 py-2 bg-[var(--color-accent)] text-white font-mono text-sm font-medium disabled:opacity-50"
+              >
+                {replayLoading ? "Starting..." : "▶ Replay vs Active"}
+              </button>
+              {traceCount === 0 && (
+                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 bg-[var(--color-text-primary)] text-white text-xs font-mono whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                  No traces yet. Generate scenarios first.
+                </div>
+              )}
+            </div>
           )}
 
           {currentVersion && !currentVersion.is_active && (
