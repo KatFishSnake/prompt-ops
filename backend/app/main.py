@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .routes import prompts, replay, scenarios, traces
 
-app = FastAPI(title="PromptOps API", version="1.0.0")
+app = FastAPI(title="PromptOps API", version="1.1.0")
 
 app.add_middleware(
     CORSMiddleware,
