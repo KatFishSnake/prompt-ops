@@ -28,9 +28,15 @@ def upgrade() -> None:
 
     # Add user_id to prompts
     op.add_column("prompts", sa.Column("user_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("users.id"), nullable=True))
-    # Drop old unique constraint on name, add composite
+    # Drop old unique constraint on name, add partial unique index (excludes soft-deleted)
     op.drop_constraint("prompts_name_key", "prompts", type_="unique")
-    op.create_unique_constraint("uq_prompt_name_user", "prompts", ["name", "user_id"])
+    op.create_index(
+        "ix_prompt_name_user_active",
+        "prompts",
+        ["name", "user_id"],
+        unique=True,
+        postgresql_where=sa.text("deleted_at IS NULL"),
+    )
 
     # Add user_id to traces
     op.add_column("traces", sa.Column("user_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("users.id"), nullable=True))
@@ -46,7 +52,7 @@ def downgrade() -> None:
     op.drop_column("scenario_jobs", "user_id")
     op.drop_column("replay_jobs", "user_id")
     op.drop_column("traces", "user_id")
-    op.drop_constraint("uq_prompt_name_user", "prompts", type_="unique")
+    op.drop_index("ix_prompt_name_user_active", table_name="prompts")
     op.add_column("prompts", sa.Column("name", sa.String(255), unique=True))
     op.drop_column("prompts", "user_id")
     op.drop_table("users")

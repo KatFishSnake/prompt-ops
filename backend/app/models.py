@@ -32,7 +32,13 @@ class Prompt(Base):
     __tablename__ = "prompts"
 
     __table_args__ = (
-        UniqueConstraint("name", "user_id", name="uq_prompt_name_user"),
+        Index(
+            "ix_prompt_name_user_active",
+            "name",
+            "user_id",
+            unique=True,
+            postgresql_where="deleted_at IS NULL",
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)

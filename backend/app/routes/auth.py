@@ -56,6 +56,13 @@ def _set_auth_cookie(response, token: str):
 
 async def _seed_demo_prompts(user_id, db: AsyncSession):
     for p_data in DEMO_PROMPTS:
+        # Skip if prompt with this name already exists for user (even if soft-deleted)
+        existing = await db.execute(
+            select(Prompt).where(Prompt.name == p_data["name"], Prompt.user_id == user_id)
+        )
+        if existing.scalar_one_or_none():
+            continue
+
         prompt = Prompt(
             name=p_data["name"],
             description=p_data["description"],
