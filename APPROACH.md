@@ -86,8 +86,6 @@ Backend API: http://localhost:8000
 Health check: http://localhost:8000/health
 
 ### Live Deploy
-Frontend (Vercel): https://prompt-ops-katfishsnakes-projects.vercel.app
+Frontend: https://promptops.world
 Backend API (Railway): https://backend-production-fa0f.up.railway.app
 Health check: https://backend-production-fa0f.up.railway.app/health
-
-Note: Railway/Vercel URLs may become unavailable after the review period.

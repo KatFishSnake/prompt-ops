@@ -129,7 +129,7 @@ async def request_magic_link(body: MagicLinkRequest):
         resend.api_key = settings.resend_api_key
         try:
             r = resend.Emails.send({
-                "from": "PromptOps <onboarding@resend.dev>",
+                "from": "PromptOps <noreply@promptops.world>",
                 "to": [email],
                 "subject": "Your PromptOps login link",
                 "html": f'<p>Click to log in to PromptOps:</p><p><a href="{verify_url}">Log in to PromptOps</a></p><p>This link expires in 15 minutes.</p>',
